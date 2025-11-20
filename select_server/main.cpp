@@ -61,7 +61,7 @@ struct Session
 // --- 전역 변수 ---
 SOCKET g_listenSocket;
 std::vector<Session*> g_sessions;
-int g_idCounter = 1000; // ID 할당 기준점
+int g_idCounter = 1; // ID 할당 기준점
 
 // --- 함수 선언 ---
 void InitializeNetwork();
@@ -134,19 +134,16 @@ void NetworkProc()
     fd_set readSet;
     FD_ZERO(&readSet);
 
-    // 1. 리슨 소켓 등록
     FD_SET(g_listenSocket, &readSet);
 
-    // 2. 접속된 세션 소켓 등록
-    for (Session* s : g_sessions)
+    for (Session* s : g_sessions) //매 i/o call마다 초기화
     {
-        if (!s->isDead) // 죽은 세션은 select에서 제외
-            FD_SET(s->socket, &readSet);
+        if (!s->isDead) 
+            FD_SET(s->socket, &readSet); // 지연삭제
     }
 
-    // 3. Select (타임아웃 0: 폴링 방식, 게임 서버 특성상 대기 없이 진행)
     timeval timeout = { 0, 0 };
-    int selectResult = select(0, &readSet, nullptr, nullptr, &timeout);
+    int selectResult = select(0, &readSet, nullptr, nullptr, &timeout); 
 
     if (selectResult == SOCKET_ERROR) return;
 
@@ -156,7 +153,6 @@ void NetworkProc()
         AcceptProc();
     }
 
-    // 5. Recv 처리
     for (Session* s : g_sessions)
     {
         if (!s->isDead && FD_ISSET(s->socket, &readSet))
@@ -167,6 +163,7 @@ void NetworkProc()
 }
 
 // --- 신규 접속 처리 (가장 중요: 동기화) ---
+// --- 신규 접속 처리 (수정됨) ---
 void AcceptProc()
 {
     sockaddr_in clientAddr;
@@ -177,19 +174,17 @@ void AcceptProc()
 
     if (g_sessions.size() >= MAX_SESSIONS)
     {
-        closesocket(clientSocket); // 접속 제한
+        closesocket(clientSocket);
         return;
     }
 
-    // 논블로킹 설정
     u_long mode = 1;
     ioctlsocket(clientSocket, FIONBIO, &mode);
 
-    // 세션 생성 및 ID 할당
     Session* newSession = new Session();
     newSession->socket = clientSocket;
     newSession->id = g_idCounter++;
-    newSession->x = 0; // 초기 위치
+    newSession->x = 0;
     newSession->y = 0;
 
     std::cout << "[접속] ID: " << newSession->id << " (" << g_sessions.size() + 1 << "명)" << std::endl;
@@ -198,11 +193,17 @@ void AcceptProc()
     PacketIDAssign idPacket = { (int)0, newSession->id, 0, 0 };
     SendUnicast(newSession, &idPacket, sizeof(idPacket));
 
-    // 2. 신규 유저 정보를 기존 유저들에게 알림 (Broadcast) -> 별 생성(1)
+    // 2. [수정된 부분] 내 캐릭터 생성 패킷 생성
     PacketStarCreate createMyStar = { (int)1, newSession->id, newSession->x, newSession->y };
-    SendBroadcast(nullptr, &createMyStar, sizeof(createMyStar)); // 모두에게(자신 포함해도 됨, 클라 로직에 따름)
 
-    // 3. 기존 유저들의 정보를 신규 유저에게 알림 (Unicast loop) -> 별 생성(1)
+    // 2-1. ★★★ 나 자신에게 내 별 생성 패킷 전송 (이게 없어서 안 보였던 것임) ★★★
+    SendUnicast(newSession, &createMyStar, sizeof(createMyStar));
+
+    // 2-2. 기존 유저들에게 내 정보 알림 (Broadcast)
+    // 나는 아직 g_sessions 리스트에 없으므로 여기서는 기존 유저들에게만 전송됨 (정상)
+    SendBroadcast(nullptr, &createMyStar, sizeof(createMyStar));
+
+    // 3. 기존 유저들의 정보를 신규 유저에게 알림 (Unicast loop)
     for (Session* s : g_sessions)
     {
         if (!s->isDead)
@@ -212,7 +213,7 @@ void AcceptProc()
         }
     }
 
-    // 리스트에 추가
+    // 모든 처리가 끝난 후 리스트에 등록
     g_sessions.push_back(newSession);
 }
 
