@@ -322,11 +322,10 @@ void Monitor()
     static DWORD lastCheckTime = 0;
     DWORD curTime = GetTickCount();
 
-    if (curTime - lastCheckTime > 1000) // 1초마다 갱신
+    if (curTime - lastCheckTime > 1000) 
     {
         lastCheckTime = curTime;
 
-        // 콘솔 타이틀에 정보 표시 (간단한 모니터링)
         char title[256];
         sprintf_s(title, "Star Server - Users: %d | Last ID: %d", (int)g_sessions.size(), g_idCounter);
         SetConsoleTitleA(title);
