@@ -13,7 +13,6 @@ public:
 
     virtual PacketType GetType() const = 0;
 
-    // RawPacket16 ↔ 파생 클래스 변환
     virtual void FromRaw(const RawPacket16& raw) = 0;
     virtual RawPacket16 ToRaw() const = 0;
 

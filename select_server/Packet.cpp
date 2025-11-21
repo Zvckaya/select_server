@@ -1,10 +1,9 @@
-// Packet.cpp
+
 #include "Packet.h"
 #include "Server.h"
 #include "Session.h"
 #include "NetConfig.h"
 
-// ================= PacketIDAssign =================
 
 void PacketIDAssign::FromRaw(const RawPacket16& raw)
 {
@@ -23,12 +22,10 @@ RawPacket16 PacketIDAssign::ToRaw() const
 
 void PacketIDAssign::Handle(Server&, Session&)
 {
-    // 서버는 클라이언트로부터 IDAssign을 받지 않음.
-    // 필요하다면 로그 정도만 남기게 구현 가능.
+    //사실 PacketIDAssign이 서버로 올일은 없음
 }
 
 
-// ================= PacketStarCreate =================
 
 void PacketStarCreate::FromRaw(const RawPacket16& raw)
 {
@@ -51,16 +48,14 @@ RawPacket16 PacketStarCreate::ToRaw() const
 
 void PacketStarCreate::Handle(Server&, Session&)
 {
-    // 클라이언트 → 서버에서는 사용 안 할 예정
-    // 필요 시 확장
+    //사실 이것도 사용할 일은 없음
 }
 
 
-// ================= PacketStarDelete =================
 
 void PacketStarDelete::FromRaw(const RawPacket16& raw)
 {
-    id = raw.a;
+    id = raw.a; //시작 + 4부터 그냥 읽는다 
 }
 
 RawPacket16 PacketStarDelete::ToRaw() const
@@ -75,17 +70,16 @@ RawPacket16 PacketStarDelete::ToRaw() const
 
 void PacketStarDelete::Handle(Server&, Session&)
 {
-    // 클라이언트 → 서버에서는 사용 안 함 (서버가 주로 보내는 패킷)
+    // 이것도 쓸일은 없음
 }
 
 
-// ================= PacketMove =================
-
 void PacketMove::FromRaw(const RawPacket16& raw)
 {
-    id = raw.a;
-    x = raw.b;
-    y = raw.c;
+
+    id = raw.a; // +4
+    x = raw.b; // +8
+    y = raw.c; //+12
 }
 
 RawPacket16 PacketMove::ToRaw() const
@@ -104,20 +98,19 @@ void PacketMove::Handle(Server& server, Session& session)
     session.x = x;
     session.y = y;
 
-    // 나를 제외하고 이동 브로드캐스트
     RawPacket16 raw = ToRaw();
-    server.Broadcast(raw, &session);
+    server.Broadcast(raw, &session); //이동 후 브로드 캐스팅
 }
 
 
-// ================= PacketFactory =================
 
-std::unique_ptr<Packet> PacketFactory::CreateFromRaw(const RawPacket16& raw)
+std::unique_ptr<Packet> PacketFactory::CreateFromRaw(const RawPacket16& raw) //raw 패킷을 받아서 자동 캐스팅 및 RAII 객체로 반환
 {
-    PacketType type = static_cast<PacketType>(raw.type);
+    PacketType type = static_cast<PacketType>(raw.type); //단순하게 static_cast 진행
 
     switch (type)
     {
+        //패킷은 RAII 객체로 만들어 반환한다.
     case PacketType::IDAssign:
         return std::make_unique<PacketIDAssign>();
     case PacketType::StarCreate:

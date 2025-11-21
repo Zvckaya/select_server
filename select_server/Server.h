@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <thread>
 
 #include "WinNetIncludes.h"
 #include "NetConfig.h"
@@ -31,6 +32,9 @@ public:
 private:
     SOCKET listenSocket = INVALID_SOCKET;
     std::vector<std::unique_ptr<Session>> sessions;
+    struct linger _linger;
+    
+
     int idCounter = 1;
 
     void NetworkProc();
@@ -39,10 +43,9 @@ private:
     void ProcessPacket(Session& session, const char* packetData);
     void DisconnectSession(Session& session);
     void CleanupDeadSessions();
-    void Monitor();
-
-    //로그용
-    void LogSend(const Session& to, const RawPacket16& raw);
+    
+    //로그용(Logger 클래스를 호출하여 단순 로그를 찍음);
+    void LogSend(const Session& to, const RawPacket16& raw); 
     void LogBroadcast(const RawPacket16& raw, const Session* exclude);
     void LogRecv(const Session& from, const RawPacket16& raw);
 };
