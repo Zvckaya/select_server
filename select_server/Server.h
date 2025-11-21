@@ -40,4 +40,9 @@ private:
     void DisconnectSession(Session& session);
     void CleanupDeadSessions();
     void Monitor();
+
+    //·Î±×¿ë
+    void LogSend(const Session& to, const RawPacket16& raw);
+    void LogBroadcast(const RawPacket16& raw, const Session* exclude);
+    void LogRecv(const Session& from, const RawPacket16& raw);
 };

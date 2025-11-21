@@ -21,4 +21,14 @@ struct RawPacket16
 
 #pragma pack(pop)
 
-
+inline const char* PacketTypeToString(PacketType type)
+{
+    switch (type)
+    {
+    case PacketType::IDAssign:   return "IDAssign";
+    case PacketType::StarCreate: return "StarCreate";
+    case PacketType::StarDelete: return "StarDelete";
+    case PacketType::Move:       return "Move";
+    default:                     return "Unknown";
+    }
+}

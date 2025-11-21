@@ -193,6 +193,8 @@ void Server::ProcessPacket(Session& session, const char* packetData)
     static_assert(sizeof(RawPacket16) == PACKET_SIZE, "PACKET_SIZE must be 16");
     std::memcpy(&raw, packetData, PACKET_SIZE);
 
+    LogRecv(session, raw);
+
     auto packet = PacketFactory::CreateFromRaw(raw);
     if (!packet)
         return;
@@ -200,6 +202,7 @@ void Server::ProcessPacket(Session& session, const char* packetData)
     packet->FromRaw(raw);
     packet->Handle(*this, session);
 }
+
 
 void Server::DisconnectSession(Session& s)
 {
@@ -250,11 +253,15 @@ void Server::Monitor()
 void Server::SendTo(Session& session, const RawPacket16& raw)
 {
     if (session.isDead) return;
+
+    LogSend(session, raw);
     send(session.socket, reinterpret_cast<const char*>(&raw), PACKET_SIZE, 0);
 }
 
 void Server::Broadcast(const RawPacket16& raw, Session* exclude)
 {
+    LogBroadcast(raw, exclude);
+
     for (auto& sp : sessions)
     {
         Session& s = *sp;
@@ -263,4 +270,37 @@ void Server::Broadcast(const RawPacket16& raw, Session* exclude)
             SendTo(s, raw);
         }
     }
+}
+
+
+void Server::LogSend(const Session& to, const RawPacket16& raw)
+{
+    PacketType type = static_cast<PacketType>(raw.type);
+    std::cout << "[SEND]  To ID=" << to.id
+        << " Type=" << PacketTypeToString(type)
+        << " (type=" << raw.type
+        << ", a=" << raw.a << ", b=" << raw.b << ", c=" << raw.c
+        << ")\n";
+}
+
+void Server::LogBroadcast(const RawPacket16& raw, const Session* exclude)
+{
+    PacketType type = static_cast<PacketType>(raw.type);
+    std::cout << "[BCAST] Type=" << PacketTypeToString(type)
+        << " (type=" << raw.type
+        << ", a=" << raw.a << ", b=" << raw.b << ", c=" << raw.c
+        << ")";
+    if (exclude)
+        std::cout << " (exclude ID=" << exclude->id << ")";
+    std::cout << "\n";
+}
+
+void Server::LogRecv(const Session& from, const RawPacket16& raw)
+{
+    PacketType type = static_cast<PacketType>(raw.type);
+    std::cout << "[RECV]  From ID=" << from.id
+        << " Type=" << PacketTypeToString(type)
+        << " (type=" << raw.type
+        << ", a=" << raw.a << ", b=" << raw.b << ", c=" << raw.c
+        << ")\n";
 }
