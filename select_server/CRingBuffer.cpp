@@ -1,5 +1,5 @@
-#include "RingBuffer.h"
-#include <string.h> // for memcpy
+#include "CRingBuffer.h"
+#include <string.h> // memcpy
 #include <algorithm>
 
 // 기본 생성자: 기본 크기 10000 바이트로 설정 (필요에 따라 조절)

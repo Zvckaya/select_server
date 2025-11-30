@@ -178,29 +178,51 @@ void Server::AcceptProc() //accept 처리
 
 void Server::RecvProc(Session& s)
 {
-    int bytesRecv = recv(s.socket, s.recvBuffer + s.recvBytes, //recvByte는 처리후 감소되는데 만약 남아있을 수도 있다.
-        sizeof(s.recvBuffer) - s.recvBytes, 0);
+    //직접 쓸 수 있는 공간 확인
+    int directSize = s.recvBuffer.DirectEnqueueSize();
 
-    if (bytesRecv == 0 || bytesRecv == SOCKET_ERROR) //recv 값이 0인데 
+    if (directSize <= 0)
     {
-        if (bytesRecv == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)//에러가 아니라 읽을 데이터가 없으니 넘어가라.
-            return;
-        
-        Logger::Instance().Log(std::to_string(s.id) + "세션 연결 끊김\n");
-        DisconnectSession(s); //아니면 세션종료 
+        return;//
+    }
+
+    int recvBytes = recv(s.socket, s.recvBuffer.GetRearBufferPtr(), directSize, 0);
+
+    if (recvBytes == SOCKET_ERROR)
+    {
+        if (WSAGetLastError() != WSAEWOULDBLOCK) // wouldblock 아니면
+        {
+            DisconnectSession(s); 
+        }
         return;
     }
 
-    s.recvBytes += bytesRecv; //recv한만큼 더해주기.
+    if (recvBytes == 0) {
+        DisconnectSession(s);
+        return;
+    }
 
-    while (s.recvBytes >= PACKET_SIZE) //패킷 사이즈만큼 처리했는가.
-    { 
-        ProcessPacket(s, s.recvBuffer); //패킷 핸들링 진행
+    s.recvBuffer.MoveRear(recvBytes);
 
-        std::memmove(s.recvBuffer,
-            s.recvBuffer + PACKET_SIZE, //처리한 패킷만큼 위치(시작위치에서)
-            s.recvBytes - PACKET_SIZE); //남은 크기 만큼 당겨라(48왔으면 16처리했으니 32만큼 당겨라)
-        s.recvBytes -= PACKET_SIZE; //처리한 만큼 빼주기
+    while (true)
+    {
+        if (s.recvBuffer.GetUseSize() < PACKET_SIZE)
+        {
+            break;
+        }
+
+        RawPacket16 raw;
+
+        int ret = s.recvBuffer.Dequeue((char*)&raw, sizeof(raw));
+
+        if (ret == sizeof(raw))
+        {
+            ProcessPacket(s, (const char*)&raw);
+        }
+        else {
+            break;
+        }
+
     }
 }
 
