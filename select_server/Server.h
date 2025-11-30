@@ -25,7 +25,6 @@ public:
 
     bool Initialize();
     void Tick();
-
     void SendTo(Session& session, const RawPacket16& raw);
     void Broadcast(const RawPacket16& raw, Session* exclude = nullptr);
 
@@ -40,6 +39,7 @@ private:
     void NetworkProc();
     void AcceptProc();
     void RecvProc(Session& session);
+    void SendProc(Session& session);
     void ProcessPacket(Session& session, const char* packetData);
     void DisconnectSession(Session& session);
     void CleanupDeadSessions();

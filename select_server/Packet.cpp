@@ -38,12 +38,12 @@ void PacketStarCreate::FromRaw(const RawPacket16& raw)
 
 RawPacket16 PacketStarCreate::ToRaw() const
 {
-    //RawPacket16 raw{};
-    //raw.type = static_cast<int32_t>(PacketType::StarCreate);
-    //raw.a = id;
-    //raw.b = x;
-    //raw.c = y;
-    //return raw;
+    RawPacket16 raw{};
+    raw.type = static_cast<int32_t>(PacketType::StarCreate);
+    raw.a = id;
+    raw.b = x;
+    raw.c = y;
+    return raw;
 }
 
 void PacketStarCreate::Handle(Server&, Session&)

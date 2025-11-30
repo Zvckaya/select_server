@@ -71,7 +71,11 @@ void Server::Tick()
 void Server::NetworkProc() //네트워크 i/o 처리
 {
     fd_set readSet; //readSet 구성
-    FD_ZERO(&readSet); //매 while마다 fd_set을 초기화해서 사용해야한다!
+    fd_set writeSet; //writeSet 
+
+    FD_ZERO(&readSet); 
+    FD_ZERO(&writeSet);
+    //매 while마다 fd_set을 초기화해서 사용해야한다!
     //fd_set은 select 호출후 변형되는 구조체 이기때문에.
     //기존 기록이 남아 있음. -> recv 하려는데 send한게 없음-> 사고발생
 
@@ -79,8 +83,16 @@ void Server::NetworkProc() //네트워크 i/o 처리
 
     for (auto& s : sessions) //세션들을 돔
     {
+
         if (!s->isDead) // 살아있으면 
-            FD_SET(s->socket, &readSet); //readSet에 추가
+        {
+            FD_SET(s->socket, &readSet); //readSet에 추가 읽기 감지 
+
+            if (s->sendBuffer.GetUseSize() > 0)
+            {
+                FD_SET(s->socket, &writeSet);
+            }
+        }
     }
 
     timeval timeout = { 0, 0 };
@@ -100,6 +112,16 @@ void Server::NetworkProc() //네트워크 i/o 처리
         {
             RecvProc(s);//포함되어 있으면 recv를 진행한다.
         }
+    }
+
+    for (auto& sp : sessions)
+    {
+        Session& s = *sp; //sp 는 이터레이터 
+        if (!s.isDead && FD_ISSET(s.socket, &writeSet))
+        {
+            SendProc(s);
+        }
+
     }
 }
 
@@ -190,23 +212,23 @@ void Server::RecvProc(Session& s)
 
     if (recvBytes == SOCKET_ERROR)
     {
-        if (WSAGetLastError() != WSAEWOULDBLOCK) // wouldblock 아니면
+        if (WSAGetLastError() != WSAEWOULDBLOCK) // wouldblock은 당장 줄 데이터가 없으니 다시 확인해라~
         {
             DisconnectSession(s); 
         }
         return;
     }
 
-    if (recvBytes == 0) {
+    if (recvBytes == 0) { //0이면 ret임 
         DisconnectSession(s);
         return;
     }
 
-    s.recvBuffer.MoveRear(recvBytes);
+    s.recvBuffer.MoveRear(recvBytes); //둘다 아니면 rear 이동(복사는 잘 되었다 가정)
 
     while (true)
     {
-        if (s.recvBuffer.GetUseSize() < PACKET_SIZE)
+        if (s.recvBuffer.GetUseSize() < PACKET_SIZE) // 하나의 패킷은 해석할 수 있는가?
         {
             break;
         }
@@ -225,6 +247,29 @@ void Server::RecvProc(Session& s)
 
     }
 }
+
+void Server::SendProc(Session& s)
+{
+    int directSize = s.sendBuffer.DirectDequeueSize();
+    if (directSize <= 0)
+        return;
+
+    int byteSent = send(s.socket, s.sendBuffer.GetFrontBufferPtr(), directSize, 0); //실제 send 수행 
+
+    if (byteSent == SOCKET_ERROR)
+    {
+        if (WSAGetLastError() != WSAEWOULDBLOCK)
+        {
+            DisconnectSession(s);
+        }
+        return;
+    }
+
+    if (byteSent > 0) {
+        s.sendBuffer.MoveFront(byteSent);
+    }
+}
+
 
 void Server::ProcessPacket(Session& session, const char* packetData)
 {
@@ -284,12 +329,22 @@ void Server::SendTo(Session& session, const RawPacket16& raw) //Raw한 패킷으로 �
 
     LogSend(session, raw); //로깅
 
-    send(session.socket, reinterpret_cast<const char*>(&raw), PACKET_SIZE, 0); //패킷 사이즈는 무조건 고정
+    int size = sizeof(raw);
+
+    if (session.sendBuffer.GetFreeSize() >= size)
+    {
+        session.sendBuffer.Enqueue((const char*)&raw, size);
+    }
+    else
+    {
+        DisconnectSession(session);
+    }
+
 }
 
 void Server::Broadcast(const RawPacket16& raw, Session* exclude) 
 {
-    LogBroadcast(raw, exclude); //로깅 
+   // LogBroadcast(raw, exclude); //로깅 
 
     for (auto& sp : sessions) //세션들을 순회하며 
     { 
