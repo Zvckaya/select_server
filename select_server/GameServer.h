@@ -1,5 +1,5 @@
 #pragma once
-#include "INetworkHandelr.h"
+#include "INetworkHandler.h"
 #include "Session.h"
 #include "Server.h"
 #include <map>
@@ -9,7 +9,7 @@ struct Player {
 	int x, y;
 };
 
-class  GameServer : public INetworkHandelr
+class  GameServer : public INetworkHandler
 {
 public:
 

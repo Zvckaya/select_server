@@ -1,5 +1,5 @@
 #include "Server.h"
-#include "INetworkHandelr.h"
+#include "INetworkHandler.h"
 #include "Packet.h" 
 #include "Logger.h"
 #include <iostream>
@@ -25,7 +25,7 @@ TcpServer::~TcpServer()
     WSACleanup();
 }
 
-bool TcpServer::Initialize(INetworkHandelr* hander)
+bool TcpServer::Initialize(INetworkHandler* hander)
 {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)

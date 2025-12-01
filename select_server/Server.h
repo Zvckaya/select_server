@@ -11,7 +11,7 @@
 
 #include "WinNetIncludes.h"
 #include "NetConfig.h"
-#include "INetworkHandelr.h"
+#include "INetworkHandler.h"
 #include "PacketTypes.h"
 #include "Session.h"
 
@@ -24,13 +24,13 @@ public:
     TcpServer();
     ~TcpServer();
 
-    bool Initialize(INetworkHandelr* hander);
+    bool Initialize(INetworkHandler* hander);
     void Tick();
     void SendTo(Session& session, const RawPacket16& raw);
     void Broadcast(const RawPacket16& raw, Session* exclude = nullptr);
 
 private:
-    INetworkHandelr* _hander = nullptr;
+    INetworkHandler* _hander = nullptr;
     SOCKET listenSocket = INVALID_SOCKET;
     std::vector<std::unique_ptr<Session>> sessions;
     struct linger _linger;

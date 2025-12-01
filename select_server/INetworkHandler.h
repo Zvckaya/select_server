@@ -2,12 +2,12 @@
 #pragma once
 #include "Session.h"
 
-class INetworkHandelr
+class INetworkHandler
 {
 
 public:
 
-	virtual ~INetworkHandelr() = default;
+	virtual ~INetworkHandler() = default;
 
 	virtual void OnConnection(Session& session) = 0;
 
