@@ -1,13 +1,14 @@
 #include "Server.h"
+#include "INetworkHandelr.h"
 #include "Packet.h" 
 #include "Logger.h"
 #include <iostream>
 #include <algorithm>
 #include <cstring>  
 
-Server::Server() = default;
+TcpServer::TcpServer() = default;
 
-Server::~Server()
+TcpServer::~TcpServer()
 {
     for (auto& s : sessions)
     {
@@ -24,7 +25,7 @@ Server::~Server()
     WSACleanup();
 }
 
-bool Server::Initialize()
+bool TcpServer::Initialize(INetworkHandelr* hander)
 {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
@@ -33,6 +34,8 @@ bool Server::Initialize()
     listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listenSocket == INVALID_SOCKET)
         return false;
+
+    _hander = hander;
 
     _linger.l_onoff = 1; //링거 구조체 초기화
     _linger.l_linger = 0;
@@ -61,14 +64,14 @@ bool Server::Initialize()
     return true; //여기까지 도달해야 listen 소켓 바인딩+리스닝 시작
 }
 
-void Server::Tick()
+void TcpServer::Tick()
 {
     NetworkProc(); //네트워크 처리.
     CleanupDeadSessions(); //지연 삭제구현.
     
 }
 
-void Server::NetworkProc() //네트워크 i/o 처리
+void TcpServer::NetworkProc() //네트워크 i/o 처리
 {
     fd_set readSet; //readSet 구성
     fd_set writeSet; //writeSet 
@@ -125,7 +128,7 @@ void Server::NetworkProc() //네트워크 i/o 처리
     }
 }
 
-void Server::AcceptProc() //accept 처리
+void TcpServer::AcceptProc() //accept 처리
 {
     sockaddr_in clientAddr;
     int addrLen = sizeof(clientAddr);
@@ -147,58 +150,26 @@ void Server::AcceptProc() //accept 처리
     auto newSession = std::make_unique<Session>(); //유니크 포인터로 생성
     newSession->socket = clientSocket;
     newSession->id = idCounter++;
-    //초기 생성위치 설정
-    newSession->x = 40;
-    newSession->y = 5;
+    
 
     Session* newSessionPtr = newSession.get(); //세선 정보를 가져옴 
 
     Logger::Instance().Log("[접속] ID: " +std::to_string(newSessionPtr->id)+" ("+ std::to_string (sessions.size() + 1)+ "명)");
 
-    // ID 할당 패킷 전송
-    {
-        //패킷의 id, 즉 무슨 패킷 인지는 enum으로 send에서 봄
-        PacketIDAssign pkt;
-        pkt.id = newSessionPtr->id;
-        RawPacket16 raw = pkt.ToRaw();
-        SendTo(*newSessionPtr, raw); //sendto는 특정 대상에게 전송하는 함수임
-        //먼저 id를 할당한다. 클라는 이 id를 이용하여 로직통신
 
-    }
-    // 내 별 생성 패킷 (나 + 기존 유저들)
+    if (_hander)
     {
-        PacketStarCreate createMy;
-        createMy.id = newSessionPtr->id;
-        createMy.x = newSessionPtr->x;
-        createMy.y = newSessionPtr->y;
-        RawPacket16 raw = createMy.ToRaw();
-        
+        Logger::Instance().Log("핸들러 호출");
 
-        //먼저 나에게 별 생성 하라 전송 
-        SendTo(*newSessionPtr, raw);
-        // 기존 유저들에게 별 생성 
-        Broadcast(raw, newSessionPtr);
-    }
-    // 기존 유저들의 별 정보를 신규 유저에게 전송 (이때 부하가 큼 신규유저는)
-    for (auto& sp : sessions)
-    {
-        Session& s = *sp;
-        if (!s.isDead) //살아있으면 별 생성 패킷을 전송해준다.
-        {
-            PacketStarCreate createOther;
-            createOther.id = s.id;
-            createOther.x = s.x;
-            createOther.y = s.y;
-            RawPacket16 raw = createOther.ToRaw();
-            SendTo(*newSessionPtr, raw);
-        }
+        _hander->OnConnection(*newSessionPtr);
     }
 
     sessions.push_back(std::move(newSession)); //성공적으로 id할당 및 별 생성했으면 세션을 추가한다.
     //session은 unique_ptr<Session>의 vector임
+
 }
 
-void Server::RecvProc(Session& s)
+void TcpServer::RecvProc(Session& s)
 {
     //직접 쓸 수 있는 공간 확인
     int directSize = s.recvBuffer.DirectEnqueueSize();
@@ -248,7 +219,7 @@ void Server::RecvProc(Session& s)
     }
 }
 
-void Server::SendProc(Session& s)
+void TcpServer::SendProc(Session& s)
 {
     int directSize = s.sendBuffer.DirectDequeueSize();
     if (directSize <= 0)
@@ -271,35 +242,29 @@ void Server::SendProc(Session& s)
 }
 
 
-void Server::ProcessPacket(Session& session, const char* packetData)
+void TcpServer::ProcessPacket(Session& session, const char* packetData)
 {
-    RawPacket16 raw{};
-    std::memcpy(&raw, packetData, PACKET_SIZE);
-
-    LogRecv(session, raw); //로깅 
-
-    auto packet = PacketFactory::CreateFromRaw(raw); //첫번째 4바이트만 확인하여 패킷을 생성한다 
-    if (!packet) // 패킷 id가 깨졌으면 nullpter이옴 그러면 그 패킷은 핸들링 하지 않는다.
-        return;
-
-    packet->FromRaw(raw); // raw는 패킷 클래스이고, 각자 데이터를 언마샬링하는 함수임 
-    packet->Handle(*this, session); //실제 핸들링
+    if (_hander)
+    {
+        _hander->OnRecv(session, packetData, PACKET_SIZE);
+    }
 }
 
 
-void Server::DisconnectSession(Session& s)
+void TcpServer::DisconnectSession(Session& s)
 {
     if (s.isDead) return; //isDead가 변경되어 있으면 return 
 
     s.isDead = true;
     Logger::Instance().Log("[종료] ID: " + std::to_string(s.id) + " 예약됨\n"); //실제 종료는 아님
-    PacketStarDelete del;
-    del.id = s.id;
-    RawPacket16 raw = del.ToRaw();
-    Broadcast(raw, &s); //이때 따른 클라이언트에서 사라진다. 아직 서버데이터와 session은 살아있음 
+    
+    if (_hander)
+    {
+        _hander->OnDisconnection(s);
+    }
 }
 
-void Server::CleanupDeadSessions()
+void TcpServer::CleanupDeadSessions()
 {
     auto it = std::remove_if(sessions.begin(), sessions.end(),
         [](const std::unique_ptr<Session>& sp)
@@ -323,7 +288,7 @@ void Server::CleanupDeadSessions()
 
 
 
-void Server::SendTo(Session& session, const RawPacket16& raw) //Raw한 패킷으로 변환해서 전송
+void TcpServer::SendTo(Session& session, const RawPacket16& raw) //Raw한 패킷으로 변환해서 전송
 {
     if (session.isDead) return; //만약 죽었으면 보내지 않음
 
@@ -342,7 +307,7 @@ void Server::SendTo(Session& session, const RawPacket16& raw) //Raw한 패킷으로 �
 
 }
 
-void Server::Broadcast(const RawPacket16& raw, Session* exclude) 
+void TcpServer::Broadcast(const RawPacket16& raw, Session* exclude)
 {
    // LogBroadcast(raw, exclude); //로깅 
 
@@ -356,7 +321,7 @@ void Server::Broadcast(const RawPacket16& raw, Session* exclude)
     }
 }
 
-void Server::LogSend(const Session& to, const RawPacket16& raw)
+void TcpServer::LogSend(const Session& to, const RawPacket16& raw)
 {
     PacketType type = static_cast<PacketType>(raw.type);
     std::string msg = "[SEND]  To ID=" + std::to_string(to.id) +
@@ -368,7 +333,7 @@ void Server::LogSend(const Session& to, const RawPacket16& raw)
     Logger::Instance().Log(msg);
 }
 
-void Server::LogBroadcast(const RawPacket16& raw, const Session* exclude)
+void TcpServer::LogBroadcast(const RawPacket16& raw, const Session* exclude)
 {
     PacketType type = static_cast<PacketType>(raw.type);
     std::string msg = "[BCAST] Type=" + std::string(PacketTypeToString(type)) +
@@ -381,7 +346,7 @@ void Server::LogBroadcast(const RawPacket16& raw, const Session* exclude)
     Logger::Instance().Log(msg);
 }
 
-void Server::LogRecv(const Session& from, const RawPacket16& raw)
+void TcpServer::LogRecv(const Session& from, const RawPacket16& raw)
 {
     PacketType type = static_cast<PacketType>(raw.type);
     std::string msg = "[RECV]  From ID=" + std::to_string(from.id) +

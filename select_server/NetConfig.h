@@ -1,6 +1,6 @@
 #pragma once
 
-constexpr int PORT = 3000;
-constexpr int PACKET_SIZE = 16;
-constexpr int MAX_SESSIONS = 60;
+inline constexpr int PORT = 3000;
+inline constexpr int PACKET_SIZE = 16;
+inline constexpr int MAX_SESSIONS = 60;
 

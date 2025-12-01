@@ -24,6 +24,21 @@
     <ClCompile Include="Server.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="CRingBuffer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Logger.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="INetworkHandelr.h">
+      <Filter>헤더 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="GameServer.h">
+      <Filter>헤더 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="GameServer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="NetConfig.h">
@@ -42,6 +57,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="WinNetIncludes.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CRingBuffer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Logger.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

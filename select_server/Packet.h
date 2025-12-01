@@ -1,8 +1,9 @@
 #pragma once
 
 #include "PacketTypes.h"
+#include "GameServer.h"
 
-class Server;
+class TcpServer;
 struct Session;
 
 // 패킷 기반 클래스
@@ -17,7 +18,7 @@ public:
     virtual RawPacket16 ToRaw() const = 0;
 
     // 패킷 처리 (서버 입장)
-    virtual void Handle(Server& server, Session& session) = 0;
+    virtual void Handle(GameServer& server, Session& session) = 0;
 };
 
 // 개별 패킷 클래스들 -----------------------
@@ -30,7 +31,7 @@ public:
     PacketType GetType() const override { return PacketType::IDAssign; }
     void FromRaw(const RawPacket16& raw) override;
     RawPacket16 ToRaw() const override;
-    void Handle(Server& server, Session& session) override;
+    void Handle(GameServer& server, Session& session) override;
 };
 
 class PacketStarCreate : public Packet
@@ -43,7 +44,7 @@ public:
     PacketType GetType() const override { return PacketType::StarCreate; }
     void FromRaw(const RawPacket16& raw) override;
     RawPacket16 ToRaw() const override;
-    void Handle(Server& server, Session& session) override;
+    void Handle(GameServer& server, Session& session) override;
 };
 
 class PacketStarDelete : public Packet
@@ -54,7 +55,7 @@ public:
     PacketType GetType() const override { return PacketType::StarDelete; }
     void FromRaw(const RawPacket16& raw) override;
     RawPacket16 ToRaw() const override;
-    void Handle(Server& server, Session& session) override;
+    void Handle(GameServer& server, Session& session) override;
 };
 
 class PacketMove : public Packet
@@ -67,7 +68,7 @@ public:
     PacketType GetType() const override { return PacketType::Move; }
     void FromRaw(const RawPacket16& raw) override;
     RawPacket16 ToRaw() const override;
-    void Handle(Server& server, Session& session) override;
+    void Handle(GameServer& server, Session& session) override;
 };
 
 // 팩토리 ----------------------------

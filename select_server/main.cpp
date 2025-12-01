@@ -2,6 +2,7 @@
 #include <chrono>
 #include <thread>
 #include "Logger.h"
+#include "GameServer.h"
 #include "Server.h"
 #include "NetConfig.h"
 
@@ -9,8 +10,11 @@ int main()
 {
     Logger::Instance().Start(); // 로깅 스레드 시작
 
-    Server server;
-    if (!server.Initialize())
+    
+    TcpServer server;
+    GameServer gameLogic;
+    gameLogic.SetNetwork(&server);
+    if (!server.Initialize(&gameLogic))
     {
         Logger::Instance().Log("서버 초기화 실패"); //모든 로깅은 로거를 쓴다. 
         Logger::Instance().Stop();

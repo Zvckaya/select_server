@@ -20,7 +20,7 @@ RawPacket16 PacketIDAssign::ToRaw() const
     return raw;
 }
 
-void PacketIDAssign::Handle(Server&, Session&)
+void PacketIDAssign::Handle(GameServer&, Session&)
 {
     //사실 PacketIDAssign이 서버로 올일은 없음
 }
@@ -46,7 +46,7 @@ RawPacket16 PacketStarCreate::ToRaw() const
     return raw;
 }
 
-void PacketStarCreate::Handle(Server&, Session&)
+void PacketStarCreate::Handle(GameServer&, Session&)
 {
     //사실 이것도 사용할 일은 없음
 }
@@ -68,7 +68,7 @@ RawPacket16 PacketStarDelete::ToRaw() const
     return raw;
 }
 
-void PacketStarDelete::Handle(Server&, Session&)
+void PacketStarDelete::Handle(GameServer&, Session&)
 {
     // 이것도 쓸일은 없음
 }
@@ -92,14 +92,14 @@ RawPacket16 PacketMove::ToRaw() const
     return raw;
 }
 
-void PacketMove::Handle(Server& server, Session& session)
+void PacketMove::Handle(GameServer& server, Session& session)
 {
-    // 서버 좌표 갱신
-    session.x = x;
-    session.y = y;
+    server.UpdatePlayerPosition(id, x, y);
 
     RawPacket16 raw = ToRaw();
-    server.Broadcast(raw, &session); //이동 후 브로드 캐스팅
+
+    server.BroadcastPacket(raw, &session);
+
 }
 
 

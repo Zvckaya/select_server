@@ -11,24 +11,26 @@
 
 #include "WinNetIncludes.h"
 #include "NetConfig.h"
+#include "INetworkHandelr.h"
 #include "PacketTypes.h"
 #include "Session.h"
 
 class Packet;
 struct RawPacket16;
 
-class Server
+class TcpServer
 {
 public:
-    Server();
-    ~Server();
+    TcpServer();
+    ~TcpServer();
 
-    bool Initialize();
+    bool Initialize(INetworkHandelr* hander);
     void Tick();
     void SendTo(Session& session, const RawPacket16& raw);
     void Broadcast(const RawPacket16& raw, Session* exclude = nullptr);
 
 private:
+    INetworkHandelr* _hander = nullptr;
     SOCKET listenSocket = INVALID_SOCKET;
     std::vector<std::unique_ptr<Session>> sessions;
     struct linger _linger;
@@ -44,6 +46,7 @@ private:
     void DisconnectSession(Session& session);
     void CleanupDeadSessions();
     
+
     //로그용(Logger 클래스를 호출하여 단순 로그를 찍음);
     void LogSend(const Session& to, const RawPacket16& raw); 
     void LogBroadcast(const RawPacket16& raw, const Session* exclude);
