@@ -128,11 +128,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CRingBuffer.cpp" />
-    <ClCompile Include="GameServer.cpp" />
-    <ClCompile Include="GameServer.h" />
     <ClCompile Include="INetworkHandler.h" />
     <ClCompile Include="Logger.cpp" />
-    <ClCompile Include="main.cpp" />
     <ClCompile Include="Packet.cpp" />
     <ClCompile Include="Server.cpp" />
   </ItemGroup>
