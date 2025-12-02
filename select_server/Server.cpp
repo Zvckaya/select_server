@@ -3,7 +3,6 @@
 #include "Packet.h" 
 #include "Logger.h"
 #include <iostream>
-#include <algorithm>
 #include <cstring>  
 
 TcpServer::TcpServer() = default;
@@ -158,8 +157,6 @@ void TcpServer::AcceptProc() //accept 처리
 
 	if (_hander)
 	{
-		Logger::Instance().Log("핸들러 호출");
-
 		_hander->OnConnection(*newSessionPtr);
 	}
 
@@ -260,6 +257,7 @@ void TcpServer::DisconnectSession(Session& s)
 
 	s.isDead = true;
 	Logger::Instance().Log("[종료] ID: " + std::to_string(s.id) + " 예약됨\n"); //실제 종료는 아님
+	
 
 	if (_hander)
 	{
@@ -269,26 +267,24 @@ void TcpServer::DisconnectSession(Session& s)
 
 void TcpServer::CleanupDeadSessions()
 {
-	auto it = std::remove_if(sessions.begin(), sessions.end(),
-		[](const std::unique_ptr<Session>& sp)
-		{
-			return sp->isDead;
-		});
-	//removeif+람다를 이용하여 세션들을 순회, 만약, 삭제예약(isDead)이 활성화 된 요소들을 뒤로 모아준다.
-	//remove_if는 실제 삭제는 아님. 반환형은 삭제되지 않는 구간의 마지막 다음 위치를 반환함!
-	//즉 이터레이터를 받아. 전체 순회가 아니라. 삭제 시작 위치에서 끝까지 돌 수 있다.
-
-	for (auto itr = it; itr != sessions.end(); ++itr)
+	// 정석적인 벡터 삭제 루프
+	for (auto it = sessions.begin(); it != sessions.end(); )
 	{
-		if ((*itr)->socket != INVALID_SOCKET) //만약 INVALID면 뭔가 문제가 있는것.
-			closesocket((*itr)->socket); //소켓 핸들을 정리해준다. 
+		if ((*it)->isDead)
+		{
+			// 1. 소켓 정리
+			if ((*it)->socket != INVALID_SOCKET)
+				closesocket((*it)->socket);
+
+			// 2. 삭제 및 이터레이터 갱신
+			it = sessions.erase(it);
+		}
+		else
+		{
+			++it;
+		}
 	}
-
-	sessions.erase(it, sessions.end()); //실제 session, 즉 서버 인메모리에서는 지금 삭제 
-	//delay 삭제를 통해 재귀를 방지하고, 댕글링 포인터 진입 자체를 막아준다 
-	//lock을 걸지 않은 이유는 main 서버 스레드는(select가 도는) 짜피 싱글이라 경합이 발생하지 않는다..
 }
-
 
 
 void TcpServer::SendTo(Session& session, const char* data, int len ) //Raw한 패킷으로 변환해서 전송

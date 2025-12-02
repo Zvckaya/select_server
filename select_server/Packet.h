@@ -1,5 +1,4 @@
 #pragma once
-
 #include "PacketTypes.h"
 
 class GameServer;
@@ -43,15 +42,32 @@ public:
 };
 
 
-
-
-
 class PacketAttack1 : public Packet
 {
 public:
     Pkt_CS_MoveAttack data;
 
     PacketType GetType() const override { return PacketType::CS_ATTACK1; }
+
+    void Handle(GameServer& server, Session& session) override;
+};
+
+class PacketAttack2 : public Packet
+{
+public:
+    Pkt_CS_MoveAttack data;
+
+    PacketType GetType() const override { return PacketType::CS_ATTACK2; }
+
+    void Handle(GameServer& server, Session& session) override;
+};
+
+class PacketAttack3 : public Packet
+{
+public:
+    Pkt_CS_MoveAttack data;
+
+    PacketType GetType() const override { return PacketType::CS_ATTACK3; }
 
     void Handle(GameServer& server, Session& session) override;
 };

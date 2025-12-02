@@ -2,8 +2,7 @@
 
 #include <algorithm> // for std::min, max
 
-class CRingBuffer
-{
+class CRingBuffer{
 public:
 	CRingBuffer(void);
 	CRingBuffer(int iBufferSize);

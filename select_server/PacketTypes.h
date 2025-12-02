@@ -79,6 +79,7 @@ struct Pkt_CS_MoveAttack
 };
 
 
+
 //명세에 있음. 뭔지는 모름
 struct Pkt_CS_Sync
 {

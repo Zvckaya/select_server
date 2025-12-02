@@ -66,25 +66,87 @@ void PacketMoveStop::Handle(GameServer& server, Session& session)
 
 void PacketAttack1::Handle(GameServer& server, Session& session)
 {
-	//// 1. 공격 방향/위치 업데이트 (필요 시)
-	//server.UpdatePlayer(session.id, data.x, data.y, data.direction);
+	auto* player = server.GetPlayer(session.id);
 
-	//// 2. 다른 유저들에게 공격 모션 알림 (SC_ATTACK1)
-	//Pkt_SC_MoveAttack sendPkt;
-	//sendPkt.header.byCode = PACKET_CODE;
-	//sendPkt.header.bySize = sizeof(Pkt_SC_MoveAttack);
-	//sendPkt.header.byType = (uint8_t)PacketType::SC_ATTACK1;
+	if (player)
+	{
+		player->x = data.x;
+		player->y = data.y;
+		player->direction = data.direction;
 
-	//sendPkt.id = session.id;
-	//sendPkt.x = data.x;
-	//sendPkt.y = data.y;
-	//sendPkt.direction = data.direction;
+		// 2. 공격 모션 브로드캐스팅 (애니메이션)
+		Pkt_SC_MoveAttack sendPkt;
+		sendPkt.header.SetInfo(PacketType::SC_ATTACK1, sizeof(Pkt_SC_MoveAttack) - sizeof(PacketHeader));
+		sendPkt.id = session.id;
+		sendPkt.x = data.x;
+		sendPkt.y = data.y;
+		sendPkt.direction = data.direction;
 
-	//server.BroadcastPacket((char*)&sendPkt, sizeof(sendPkt), &session);
+		server.BroadcastPacket((char*)&sendPkt, sizeof(sendPkt), &session);
 
-	// TODO: 여기서 충돌 판정(Damage) 로직을 추가할 수 있음
-	// server.ProcessAttack(session.id, ...);
+		// 3. 서버에서 피격 판정 계산 수행
+		server.HandleAttack(session.id, 1);
+
+	}
+
+	
 }
+
+
+void PacketAttack2::Handle(GameServer& server, Session& session)
+{
+	auto* player = server.GetPlayer(session.id);
+
+	if (player)
+	{
+		player->x = data.x;
+		player->y = data.y;
+		player->direction = data.direction;
+
+		// 2. 공격 모션 브로드캐스팅 (애니메이션)
+		Pkt_SC_MoveAttack sendPkt;
+		sendPkt.header.SetInfo(PacketType::SC_ATTACK2, sizeof(Pkt_SC_MoveAttack) - sizeof(PacketHeader));
+		sendPkt.id = session.id;
+		sendPkt.x = data.x;
+		sendPkt.y = data.y;
+		sendPkt.direction = data.direction;
+
+		server.BroadcastPacket((char*)&sendPkt, sizeof(sendPkt), &session);
+
+		// 3. 서버에서 피격 판정 계산 수행
+		server.HandleAttack(session.id, 2);
+
+	}
+}
+
+void PacketAttack3::Handle(GameServer& server, Session& session)
+{
+	auto* player = server.GetPlayer(session.id);
+
+	if (player)
+	{
+		player->x = data.x;
+		player->y = data.y;
+		player->direction = data.direction;
+
+		// 2. 공격 모션 브로드캐스팅 (애니메이션)
+		Pkt_SC_MoveAttack sendPkt;
+		sendPkt.header.SetInfo(PacketType::SC_ATTACK3, sizeof(Pkt_SC_MoveAttack) - sizeof(PacketHeader));
+		sendPkt.id = session.id;
+		sendPkt.x = data.x;
+		sendPkt.y = data.y;
+		sendPkt.direction = data.direction;
+
+		server.BroadcastPacket((char*)&sendPkt, sizeof(sendPkt), &session);
+
+		// 3. 서버에서 피격 판정 계산 수행
+		server.HandleAttack(session.id, 3);
+
+	}
+}
+
+
+
 
 std::unique_ptr<Packet> PacketFactory::CreatePacket(PacketHeader* header)
 {
@@ -111,10 +173,23 @@ std::unique_ptr<Packet> PacketFactory::CreatePacket(PacketHeader* header)
 
 	case PacketType::CS_ATTACK1:
 	{
-		auto pkt = std::make_unique<PacketMoveStart>();
+		auto pkt = std::make_unique<PacketAttack1>();
 		memcpy(&pkt->data, header, sizeof(Pkt_CS_MoveAttack));
 		return pkt;
 	}
+	case PacketType::CS_ATTACK2:
+	{
+		auto pkt = std::make_unique<PacketAttack2>();
+		memcpy(&pkt->data, header, sizeof(Pkt_CS_MoveAttack));
+		return pkt;
+	}
+	case PacketType::CS_ATTACK3:
+	{
+		auto pkt = std::make_unique<PacketAttack3>();
+		memcpy(&pkt->data, header, sizeof(Pkt_CS_MoveAttack));
+		return pkt;
+	}
+	
 
 	default:
 		return nullptr;

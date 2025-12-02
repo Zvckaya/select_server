@@ -1,6 +1,7 @@
 
 #pragma once
-#include "Session.h"
+
+struct Session;
 
 class INetworkHandler
 {

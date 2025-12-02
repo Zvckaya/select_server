@@ -8,37 +8,6 @@
 #include <iomanip>
 #include <sstream>
 
-// 패킷 내용을 낱낱이 까보는 함수
-void InspectCreateCharPacket(const Pkt_SC_CreateChar& pkt)
-{
-	std::stringstream ss;
-	ss << "\n========== [패킷 검사기] SC_CREATE_MY_CHARACTER ==========\n";
-
-	// 1. 값 확인 (논리적 데이터)
-	ss << "[Header] Code: 0x" << std::hex << (int)pkt.header.byCode
-		<< " | Size: " << std::dec << (int)pkt.header.bySize
-		<< " | Type: " << (int)pkt.header.byType << "\n";
-
-	ss << "[Body]   ID: " << pkt.id << "\n"
-		<< "         Dir: " << (int)pkt.direction << "\n"
-		<< "         X: " << pkt.x << "  Y: " << pkt.y << "\n"
-		<< "         HP: " << (int)pkt.hp << "\n";
-
-	// 2. 헥사 덤프 (실제 메모리 배열 - 가장 중요!)
-	// 여기서 00이나 CC 같은 이상한 패딩 바이트가 끼어있는지 봐야 함
-	ss << "[HexDump] (Total " << sizeof(pkt) << " bytes)\n";
-
-	const unsigned char* ptr = (const unsigned char*)&pkt;
-	for (int i = 0; i < sizeof(pkt); ++i)
-	{
-		// 1바이트씩 16진수로 출력
-		ss << std::hex << std::setw(2) << std::setfill('0') << (int)ptr[i] << " ";
-	}
-	ss << "\n======================================================\n";
-
-	// 콘솔에 출력 (혹은 Logger::Instance().Log(ss.str()) 사용)
-	std::cout << ss.str() << std::endl;
-}
 
 GameServer::GameServer()
 {
@@ -65,7 +34,6 @@ void GameServer::OnConnection(Session& session)
 		pkt.direction = newPlayer.direction;
 		pkt.hp = newPlayer.hp;
 
-		InspectCreateCharPacket(pkt);
 		SendPacket(session, &pkt, sizeof(pkt));
 	}
 
@@ -81,7 +49,6 @@ void GameServer::OnConnection(Session& session)
 		pkt.hp = newPlayer.hp;
 
 
-		InspectCreateCharPacket(pkt);
 		// 나(session)를 제외하고 모두에게 전송
 		BroadcastPacket(&pkt, sizeof(pkt), &session);
 	}
@@ -103,7 +70,6 @@ void GameServer::OnConnection(Session& session)
 		pkt.hp = other.hp;
 
 
-		InspectCreateCharPacket(pkt);
 		SendPacket(session, &pkt, sizeof(pkt));
 	}
 }
@@ -116,12 +82,10 @@ void GameServer::OnDisconnection(Session& session)
 
 	// 2. 다른 유저들에게 삭제 알림 (SC_DELETE_CHARACTER)
 	Pkt_SC_DeleteChar pkt;
-	pkt.header.byCode = PACKET_CODE;
-	pkt.header.bySize = sizeof(Pkt_SC_DeleteChar);
-	pkt.header.byType = (uint8_t)PacketType::SC_DELETE_CHARACTER;
+	pkt.header.SetInfo(PacketType::SC_DELETE_CHARACTER, sizeof(Pkt_SC_DeleteChar) - sizeof(PacketHeader));
 	pkt.id = session.id;
 
-	BroadcastPacket(&pkt, sizeof(pkt), &session);
+	BroadcastPacket(&pkt, sizeof(pkt));
 }
 
 void GameServer::OnRecv(Session& session, const char* packetData, int len)
@@ -211,7 +175,7 @@ void GameServer::MovePlayer(Player& p)
 	// Bottom
 	if (p.y > RANGE_MOVE_BOTTOM) p.y = RANGE_MOVE_BOTTOM;
 
-	Logger::Instance().Log("id:" + std::to_string(p.id) + " x: " + std::to_string(p.x) + " p.y" + std::to_string(p.y));
+	//Logger::Instance().Log("id:" + std::to_string(p.id) + " x: " + std::to_string(p.x) + " p.y" + std::to_string(p.y));
 }
 
 Player* GameServer::GetPlayer(int id)
@@ -227,4 +191,116 @@ Player* GameServer::GetPlayer(int id)
 void GameServer::Update()
 {
 	UpdatePlayers();
+}
+
+void GameServer::HandleAttack(int attackerId, int attackType)
+{
+	// 1. 공격자 찾기
+	Player* attacker = GetPlayer(attackerId);
+	if (attacker == nullptr) return;
+
+	// 2. 공격 범위 및 데미지 설정
+	int rangeX = 0;
+	int rangeY = 0;
+	int damage = 0;
+
+	switch (attackType)
+	{
+	case 1:
+		rangeX = dfATTACK1_RANGE_X; // 80
+		rangeY = dfATTACK1_RANGE_Y; // 10
+		damage = 10; // 주먹 데미지
+		break;
+	case 2:
+		rangeX = dfATTACK2_RANGE_X; // 90
+		rangeY = dfATTACK2_RANGE_Y; // 10
+		damage = 20; // 큰주먹
+		break;
+	case 3:
+		rangeX = dfATTACK3_RANGE_X; // 100
+		rangeY = dfATTACK1_RANGE_Y; // 20
+		damage = 30; // 발차기
+		break;
+	default:
+		return;
+	}
+
+	// 3. 피격 판정 루프 (모든 유저 검사)
+	// (최적화를 위해선 쿼드트리 등을 쓰지만, 60명이면 그냥 루프 돌아도 충분함)
+	for (auto& pair : _players)
+	{
+		int victimId = pair.first;
+		Player& victim = pair.second;
+
+		// 나 자신은 공격 안 함
+		if (victimId == attackerId) continue;
+		// 이미 죽은 사람은 안 때림
+		if (victim.hp <= 0) continue;
+
+		// [중요] Y축 범위 체크 (위아래 높이)
+		// 공격자의 Y를 기준으로 위아래 RangeY 안에 있어야 함
+		if (abs(attacker->y - victim.y) > rangeY)
+			continue; // 높이가 안 맞음 (빗나감)
+
+		// [중요] X축 범위 체크 (방향 고려)
+		bool isHit = false;
+
+		// 공격자가 왼쪽(LL)을 보고 있을 때: (Attacker.X - Range) ~ (Attacker.X)
+		if (attacker->direction == dfPACKET_MOVE_DIR_LL)
+		{
+			if (victim.x >= (attacker->x - rangeX) && victim.x <= attacker->x)
+			{
+				isHit = true;
+			}
+		}
+		// 공격자가 오른쪽(RR)을 보고 있을 때: (Attacker.X) ~ (Attacker.X + Range)
+		else
+		{
+			// 대각선이나 위/아래를 보고 있어도 보통 오른쪽 판정으로 퉁치거나, 
+			// 정확히 하려면 8방향 다 따져야 하지만 일단 RR기준으로 처리
+			if (victim.x >= attacker->x && victim.x <= (attacker->x + rangeX))
+			{
+				isHit = true;
+			}
+		}
+
+		// 4. 맞았다면?
+		if (isHit)
+		{
+			// 체력 감소 (음수 방지)
+			if (victim.hp > damage)
+				victim.hp -= (uint8_t)damage;
+			else
+				victim.hp = 0;
+
+			// [데미지 패킷 전송] SC_DAMAGE (모두에게 알림)
+			Pkt_SC_Damage dmgPkt;
+			dmgPkt.header.SetInfo(PacketType::SC_DAMAGE, sizeof(Pkt_SC_Damage) - sizeof(PacketHeader));
+			dmgPkt.attackId = attackerId;
+			dmgPkt.damageId = victimId;
+			dmgPkt.damageHp = victim.hp;
+
+			BroadcastPacket(&dmgPkt, sizeof(dmgPkt));
+
+			// 로그 확인
+			Logger::Instance().Log("Hit! Attacker:" + std::to_string(attackerId) +
+				" Victim:" + std::to_string(victimId) + " HP:" + std::to_string(victim.hp));
+
+			// 만약 죽었다면? (HP 0) -> DELETE 패킷 처리
+			if (victim.hp == 0)
+			{
+				// 죽음 처리 로직 (나중에 부활 등 필요하면 여기서 처리)
+				Pkt_SC_DeleteChar delPkt;
+				delPkt.header.SetInfo(PacketType::SC_DELETE_CHARACTER, sizeof(Pkt_SC_DeleteChar) - sizeof(PacketHeader));
+				delPkt.id = victimId;
+				BroadcastPacket(&delPkt, sizeof(delPkt));
+				
+		
+
+				// 실제 _players 맵에서 지우는건 Disconnect될 때 하거나, 
+				// 게임 기획에 따라 시체로 남겨둘지 결정해야 함. 
+				// 여기서는 일단 클라에서만 지우라고 패킷 보냄.
+			}
+		}
+	}
 }

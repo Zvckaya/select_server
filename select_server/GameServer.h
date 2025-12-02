@@ -5,7 +5,7 @@
 
 // 전방 선언
 class TcpServer;
-
+struct Session;
 
 //플레이어 
 struct Player {
@@ -43,6 +43,7 @@ public:
     void Update();
     void UpdatePlayers();
     void MovePlayer(Player& player);
+    void HandleAttack(int attackerId, int attackType);
 
 private:
     TcpServer* _network = nullptr;

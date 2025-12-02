@@ -17,18 +17,26 @@ inline constexpr int RANGE_MOVE_LEFT = 10;
 inline constexpr int RANGE_MOVE_RIGHT = 630;
 inline constexpr int RANGE_MOVE_BOTTOM = 470;
 
-// 공격 범위
-inline constexpr int ATTACK1_RANGE_X = 80;
-inline constexpr int ATTACK1_RANGE_Y = 10;
+
 
 //에러체크 범위
-inline constexpr int dfERROR_RANGE = 50
+inline constexpr int dfERROR_RANGE = 50;
 
-#define dfPACKET_MOVE_DIR_LL 0
-#define dfPACKET_MOVE_DIR_LU 1
-#define dfPACKET_MOVE_DIR_UU 2
-#define dfPACKET_MOVE_DIR_RU 3
-#define dfPACKET_MOVE_DIR_RR 4
-#define dfPACKET_MOVE_DIR_RD 5
-#define dfPACKET_MOVE_DIR_DD 6
-#define dfPACKET_MOVE_DIR_LD 7
+// 공격범위
+inline constexpr int dfATTACK1_RANGE_X = 80;
+inline constexpr int dfATTACK2_RANGE_X = 90;
+inline constexpr int dfATTACK3_RANGE_X = 100;
+inline constexpr int dfATTACK1_RANGE_Y = 10;
+inline constexpr int dfATTACK2_RANGE_Y = 10;
+inline constexpr int dfATTACK3_RANGE_Y = 20;
+
+
+//방향 
+inline constexpr int dfPACKET_MOVE_DIR_LL = 0;
+inline constexpr int dfPACKET_MOVE_DIR_LU = 1;
+inline constexpr int dfPACKET_MOVE_DIR_UU= 2;
+inline constexpr int dfPACKET_MOVE_DIR_RU = 3;
+inline constexpr int dfPACKET_MOVE_DIR_RR = 4;
+inline constexpr int dfPACKET_MOVE_DIR_RD = 5;
+inline constexpr int dfPACKET_MOVE_DIR_DD = 6;
+inline constexpr int dfPACKET_MOVE_DIR_LD = 7;
