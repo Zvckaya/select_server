@@ -20,3 +20,12 @@ inline constexpr int RANGE_MOVE_BOTTOM = 470;
 // 공격 범위
 inline constexpr int ATTACK1_RANGE_X = 80;
 inline constexpr int ATTACK1_RANGE_Y = 10;
+
+#define dfPACKET_MOVE_DIR_LL 0
+#define dfPACKET_MOVE_DIR_LU 1
+#define dfPACKET_MOVE_DIR_UU 2
+#define dfPACKET_MOVE_DIR_RU 3
+#define dfPACKET_MOVE_DIR_RR 4
+#define dfPACKET_MOVE_DIR_RD 5
+#define dfPACKET_MOVE_DIR_DD 6
+#define dfPACKET_MOVE_DIR_LD 7

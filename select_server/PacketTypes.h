@@ -2,8 +2,8 @@
 #include <cstdint>
 
 constexpr uint8_t PACKET_CODE = 0x89;
+constexpr int HEADER_SIZE = sizeof(uint8_t) * 3;
 
-#pragma pack(push, 1) 
 enum class PacketType : uint8_t
 {
 	// Server -> Client
@@ -32,6 +32,9 @@ enum class PacketType : uint8_t
 };
 
 
+
+#pragma pack(push, 1) 
+
 //패킷 구조체 선언
 
 //패킷 헤더(3바이트 고정)
@@ -40,6 +43,27 @@ struct PacketHeader
 	uint8_t byCode; //0x89아니면 컷
 	uint8_t bySize; //전체 사이즈
 	uint8_t byType;
+
+	void SetInfo(PacketType type, int bodySize)
+	{
+		byCode = PACKET_CODE;
+		byType = (uint8_t)type;
+		bySize = (uint8_t)bodySize;
+	}
+
+	int GetTotalSize() const
+	{
+		return bySize + HEADER_SIZE;
+	}
+	int GetBodySize() const
+	{
+		return bySize;
+	}
+
+	bool IsValid() const
+	{
+		return byCode == PACKET_CODE;
+	}
 };
 
 
@@ -53,6 +77,7 @@ struct Pkt_CS_MoveAttack
 	int16_t  x;
 	int16_t  y;
 };
+
 
 //명세에 있음. 뭔지는 모름
 struct Pkt_CS_Sync
