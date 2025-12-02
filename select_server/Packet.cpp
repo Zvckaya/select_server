@@ -3,6 +3,7 @@
 #include "Server.h"
 #include "Session.h"
 #include "NetConfig.h"
+#include "Logger.h"
 
 
 void PacketMoveStart::Handle(GameServer& server, Session& session)
@@ -32,25 +33,35 @@ void PacketMoveStart::Handle(GameServer& server, Session& session)
 
 void PacketMoveStop::Handle(GameServer& server, Session& session)
 {
-	Player* player = server.GetPlayer(session.id);
-	//if (player)
-	//{
-	//	player->x = data.x; // 클라가 보낸 최종 좌표로 보정	
-	//	player->y = data.y;
-	//	player->direction = data.direction;
-	//	player->isMoving = false; 
-	//}
+	auto* player = server.GetPlayer(session.id);
+	if (player)
+	{
+		if (abs(player->x - data.x) < dfERROR_RANGE && abs(player->y - data.y) < dfERROR_RANGE)
+		{
+			player->x = data.x; // 클라가 보낸 최종 좌표로 보정	
+			player->y = data.y;
+			player->direction = data.direction;
+			player->isMoving = false;
 
-	// 2. 다른 유저들에게 알림
-	Pkt_SC_MoveAttack sendPkt;
+			Pkt_SC_MoveAttack sendPkt;
+			sendPkt.header.SetInfo(PacketType::SC_MOVE_STOP, sizeof(Pkt_SC_MoveAttack) - sizeof(PacketHeader));
+			sendPkt.id = session.id;
+			sendPkt.x = data.x;
+			sendPkt.y = data.y;
+			sendPkt.direction = data.direction;
 
-	sendPkt.header.SetInfo(PacketType::SC_MOVE_STOP, sizeof(Pkt_SC_MoveAttack) - sizeof(PacketHeader));
-	sendPkt.id = session.id;
-	sendPkt.x = data.x;
-	sendPkt.y = data.y;
-	sendPkt.direction = data.direction;
+			server.BroadcastPacket((char*)&sendPkt, sizeof(sendPkt), &session);
+		}
+		else {
+			Logger::Instance().Log("[핵 의심 사용자] User " + std::to_string(session.id) +
+				"  X:" + std::to_string(abs(player->x - data.x)) +
+				" Y:" + std::to_string(abs(player->y - data.y)));
+			session.isDead = true;
+		}
+		
+	}
 
-	server.BroadcastPacket((char*)&sendPkt, sizeof(sendPkt), &session);
+	
 }
 
 void PacketAttack1::Handle(GameServer& server, Session& session)

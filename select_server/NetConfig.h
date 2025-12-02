@@ -21,6 +21,9 @@ inline constexpr int RANGE_MOVE_BOTTOM = 470;
 inline constexpr int ATTACK1_RANGE_X = 80;
 inline constexpr int ATTACK1_RANGE_Y = 10;
 
+//에러체크 범위
+inline constexpr int dfERROR_RANGE = 50
+
 #define dfPACKET_MOVE_DIR_LL 0
 #define dfPACKET_MOVE_DIR_LU 1
 #define dfPACKET_MOVE_DIR_UU 2
