@@ -319,6 +319,23 @@ void TcpServer::Broadcast(const char* data,int len, Session* exclude)
 		}
 	}
 }
+
+void TcpServer::KickSession(int id)
+{
+	auto it = std::find_if(sessions.begin(), sessions.end(),
+		[id](const std::unique_ptr<Session>& s)
+		{
+			return s->id == id;
+		});
+
+	if (it != sessions.end())
+	{
+		DisconnectSession(*(*it));
+	}
+	
+
+}
+
 //
 //void TcpServer::LogSend(const Session& to, const RawPacket16& raw)
 //{

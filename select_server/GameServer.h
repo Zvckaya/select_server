@@ -38,6 +38,7 @@ public:
 
     // 플레이어 찾기
     Player* GetPlayer(int id);
+    void KickUser(int id);
 
     //프레임 로직
     void Update();

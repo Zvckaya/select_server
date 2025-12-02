@@ -7,7 +7,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
-
+#include <random>
 
 GameServer::GameServer()
 {
@@ -18,8 +18,8 @@ void GameServer::OnConnection(Session& session)
 {
 	Player newPlayer;
 	newPlayer.id = session.id;
-	newPlayer.x = 100;
-	newPlayer.y = 100;
+	newPlayer.x = RANGE_MOVE_LEFT + (rand() % (RANGE_MOVE_RIGHT - RANGE_MOVE_LEFT + 1));
+	newPlayer.y = RANGE_MOVE_TOP + (rand() % (RANGE_MOVE_BOTTOM - RANGE_MOVE_TOP + 1));
 	newPlayer.direction = dfPACKET_MOVE_DIR_LL;
 	newPlayer.hp = 100;
 
@@ -237,12 +237,11 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 		// 이미 죽은 사람은 안 때림
 		if (victim.hp <= 0) continue;
 
-		// [중요] Y축 범위 체크 (위아래 높이)
 		// 공격자의 Y를 기준으로 위아래 RangeY 안에 있어야 함
 		if (abs(attacker->y - victim.y) > rangeY)
 			continue; // 높이가 안 맞음 (빗나감)
 
-		// [중요] X축 범위 체크 (방향 고려)
+		//범위체크
 		bool isHit = false;
 
 		// 공격자가 왼쪽(LL)을 보고 있을 때: (Attacker.X - Range) ~ (Attacker.X)
@@ -273,7 +272,6 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 			else
 				victim.hp = 0;
 
-			// [데미지 패킷 전송] SC_DAMAGE (모두에게 알림)
 			Pkt_SC_Damage dmgPkt;
 			dmgPkt.header.SetInfo(PacketType::SC_DAMAGE, sizeof(Pkt_SC_Damage) - sizeof(PacketHeader));
 			dmgPkt.attackId = attackerId;
@@ -282,9 +280,6 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 
 			BroadcastPacket(&dmgPkt, sizeof(dmgPkt));
 
-			// 로그 확인
-			Logger::Instance().Log("Hit! Attacker:" + std::to_string(attackerId) +
-				" Victim:" + std::to_string(victimId) + " HP:" + std::to_string(victim.hp));
 
 			// 만약 죽었다면? (HP 0) -> DELETE 패킷 처리
 			if (victim.hp == 0)
@@ -293,14 +288,18 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 				Pkt_SC_DeleteChar delPkt;
 				delPkt.header.SetInfo(PacketType::SC_DELETE_CHARACTER, sizeof(Pkt_SC_DeleteChar) - sizeof(PacketHeader));
 				delPkt.id = victimId;
+				_players.erase(victimId);
 				BroadcastPacket(&delPkt, sizeof(delPkt));
 				
-		
+				//KickUser(victimId);
 
-				// 실제 _players 맵에서 지우는건 Disconnect될 때 하거나, 
-				// 게임 기획에 따라 시체로 남겨둘지 결정해야 함. 
-				// 여기서는 일단 클라에서만 지우라고 패킷 보냄.
 			}
 		}
 	}
+}
+
+void GameServer::KickUser(int id)
+{
+	if (_network) 
+		_network->KickSession(id);
 }

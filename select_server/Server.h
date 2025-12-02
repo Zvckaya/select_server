@@ -27,6 +27,7 @@ public:
     void Tick();
     void SendTo(Session& session, const char*data, int len);
     void Broadcast(const char* data, int len, Session* exclude =nullptr);
+    void KickSession(int id);
 
 private:
     INetworkHandler* _hander = nullptr;
