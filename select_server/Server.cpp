@@ -215,13 +215,35 @@ void TcpServer::RecvProc(Session& s)
 			break;
 		}
 
-		std::vector<char> packetData(totalSize);
-		s.recvBuffer.Dequeue(packetData.data(), totalSize);
+		int directReadSize = s.recvBuffer.DirectDequeueSize();
 
-		if (_hander)
+		if (directReadSize >= totalSize)
 		{
-			_hander->OnRecv(s, packetData.data(), totalSize);
+			char* packetPtr = s.recvBuffer.GetFrontBufferPtr();
+
+			if (_hander)
+				_hander->OnRecv(s, packetPtr, totalSize);
+
+			s.recvBuffer.MoveFront(totalSize);
 		}
+		else
+		{
+		
+
+			if (_copyBuffer.capacity() < totalSize)
+				_copyBuffer.reserve(totalSize * 1.5); 
+
+			// 논리적 크기 조절 (할당 아님)
+			_copyBuffer.resize(totalSize);
+
+			s.recvBuffer.Peek(_copyBuffer.data(), totalSize);
+
+			if (_hander)
+				_hander->OnRecv(s, _copyBuffer.data(), totalSize);
+
+			s.recvBuffer.MoveFront(totalSize);
+		}
+
 	}
 
 }

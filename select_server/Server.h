@@ -34,7 +34,7 @@ private:
     SOCKET listenSocket = INVALID_SOCKET;
     std::vector<std::unique_ptr<Session>> sessions;
     struct linger _linger;
-    
+    std::vector<char> _copyBuffer;
 
     int idCounter = 1;
 
