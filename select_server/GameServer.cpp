@@ -1,5 +1,6 @@
 #include "GameServer.h"
 #include "Packet.h"
+#include "PacketBuffer.h"
 #include "Server.h"
 #include "NetConfig.h"
 #include "Logger.h"
@@ -26,31 +27,29 @@ void GameServer::OnConnection(Session& session)
 	_players[session.id] = newPlayer;
 
 	{
-		Pkt_SC_CreateChar pkt;
-		pkt.header.SetInfo(PacketType::SC_CREATE_MY_CHARACTER, sizeof(Pkt_SC_CreateChar) - sizeof(PacketHeader));
-		pkt.id = newPlayer.id;
-		pkt.x = newPlayer.x;
-		pkt.y = newPlayer.y;
-		pkt.direction = newPlayer.direction;
-		pkt.hp = newPlayer.hp;
+		PacketBuffer pkt;
+		pkt.MoveWritePos(sizeof(PacketHeader));
 
-		SendPacket(session, &pkt, sizeof(pkt));
+		pkt << newPlayer.id << newPlayer.direction << newPlayer.x << newPlayer.y << newPlayer.hp;
+
+		PacketHeader* header = (PacketHeader*)pkt.GetBufferPtr();
+		header->SetInfo(PacketType::SC_CREATE_MY_CHARACTER, pkt.GetDataSize() - sizeof(PacketHeader));
+
+		SendPacket(session, pkt.GetBufferPtr(), pkt.GetDataSize());
 	}
 
 	{
-		Pkt_SC_CreateChar pkt;
+		PacketBuffer pkt;
+		pkt.MoveWritePos(sizeof(PacketHeader));
 
-		pkt.header.SetInfo(PacketType::SC_CREATE_OTHER_CHARACTER, sizeof(Pkt_SC_CreateChar) - sizeof(PacketHeader));
+		// 구조 동일: id, direction, x, y, hp
+		pkt << newPlayer.id << newPlayer.direction << newPlayer.x << newPlayer.y << newPlayer.hp;
 
-		pkt.id = newPlayer.id;
-		pkt.x = newPlayer.x;
-		pkt.y = newPlayer.y;
-		pkt.direction = newPlayer.direction;
-		pkt.hp = newPlayer.hp;
-
+		PacketHeader* header = (PacketHeader*)pkt.GetBufferPtr();
+		header->SetInfo(PacketType::SC_CREATE_OTHER_CHARACTER, pkt.GetDataSize() - sizeof(PacketHeader));
 
 		// 나(session)를 제외하고 모두에게 전송
-		BroadcastPacket(&pkt, sizeof(pkt), &session);
+		BroadcastPacket(pkt.GetBufferPtr(), pkt.GetDataSize(), &session);
 	}
 
 	for (auto& pair : _players)
@@ -59,32 +58,33 @@ void GameServer::OnConnection(Session& session)
 
 		Player& other = pair.second;
 
-		Pkt_SC_CreateChar pkt;
+		PacketBuffer pkt;
+		pkt.MoveWritePos(sizeof(PacketHeader));
 
-		pkt.header.SetInfo(PacketType::SC_CREATE_OTHER_CHARACTER, sizeof(Pkt_SC_CreateChar) - sizeof(PacketHeader));
+		pkt << other.id << other.direction << other.x << other.y << other.hp;
 
-		pkt.id = other.id;
-		pkt.x = other.x;
-		pkt.y = other.y;
-		pkt.direction = other.direction;
-		pkt.hp = other.hp;
+		PacketHeader* header = (PacketHeader*)pkt.GetBufferPtr();
+		header->SetInfo(PacketType::SC_CREATE_OTHER_CHARACTER, pkt.GetDataSize() - sizeof(PacketHeader));
 
-
-		SendPacket(session, &pkt, sizeof(pkt));
+		SendPacket(session, pkt.GetBufferPtr(), pkt.GetDataSize());
 	}
 }
 
 
 void GameServer::OnDisconnection(Session& session)
 {
-	
 	_players.erase(session.id);
 
-	Pkt_SC_DeleteChar pkt;
-	pkt.header.SetInfo(PacketType::SC_DELETE_CHARACTER, sizeof(Pkt_SC_DeleteChar) - sizeof(PacketHeader));
-	pkt.id = session.id;
+	// SC_DELETE_CHARACTER 패킷 전송
+	PacketBuffer pkt;
+	pkt.MoveWritePos(sizeof(PacketHeader));
 
-	BroadcastPacket(&pkt, sizeof(pkt));
+	pkt << session.id; // 삭제할 ID
+
+	PacketHeader* header = (PacketHeader*)pkt.GetBufferPtr();
+	header->SetInfo(PacketType::SC_DELETE_CHARACTER, pkt.GetDataSize() - sizeof(PacketHeader));
+
+	BroadcastPacket(pkt.GetBufferPtr(), pkt.GetDataSize());
 }
 
 void GameServer::OnRecv(Session& session, const char* packetData, int len)
@@ -112,6 +112,8 @@ void GameServer::BroadcastPacket(void* ptr, int size, Session* exclude)
 	if (_network)
 		_network->Broadcast((char*)ptr, size, exclude);
 }
+
+
 
 
 void GameServer::UpdatePlayers()
@@ -160,20 +162,14 @@ void GameServer::MovePlayer(Player& p)
 		break;
 	}
 
-	//범위체크
-	// Left
 	if (p.x < RANGE_MOVE_LEFT) p.x = RANGE_MOVE_LEFT;
 
-	// Right
 	if (p.x > RANGE_MOVE_RIGHT) p.x = RANGE_MOVE_RIGHT;
 
-	// Top (화면 좌표계에서 Y가 작을수록 위쪽)
 	if (p.y < RANGE_MOVE_TOP) p.y = RANGE_MOVE_TOP;
 
-	// Bottom
 	if (p.y > RANGE_MOVE_BOTTOM) p.y = RANGE_MOVE_BOTTOM;
 
-	//Logger::Instance().Log("id:" + std::to_string(p.id) + " x: " + std::to_string(p.x) + " p.y" + std::to_string(p.y));
 }
 
 Player* GameServer::GetPlayer(int id)
@@ -226,7 +222,6 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 		int victimId = pair.first;
 		Player& victim = pair.second;
 
-		// 나 자신은 공격 안 함
 		if (victimId == attackerId) continue;
 		// 이미 죽은 사람은 안 때림
 		if (victim.hp <= 0) continue;
@@ -259,33 +254,41 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 
 		if (isHit)
 		{
+	
 			// 체력 감소 (음수 방지)
 			if (victim.hp > damage)
 				victim.hp -= (uint8_t)damage;
 			else
 				victim.hp = 0;
 
-			Pkt_SC_Damage dmgPkt;
-			dmgPkt.header.SetInfo(PacketType::SC_DAMAGE, sizeof(Pkt_SC_Damage) - sizeof(PacketHeader));
-			dmgPkt.attackId = attackerId;
-			dmgPkt.damageId = victimId;
-			dmgPkt.damageHp = victim.hp;
+			// [수정] 데미지 패킷 (SC_DAMAGE) - PacketBuffer 사용
+			PacketBuffer dmgPkt;
+			dmgPkt.MoveWritePos(sizeof(PacketHeader));
 
-			BroadcastPacket(&dmgPkt, sizeof(dmgPkt));
+			// 구조: AttackerID -> DamageID -> DamageHP
+			dmgPkt << attackerId << victimId << victim.hp;
+
+			PacketHeader* header = (PacketHeader*)dmgPkt.GetBufferPtr();
+			header->SetInfo(PacketType::SC_DAMAGE, dmgPkt.GetDataSize() - sizeof(PacketHeader));
+
+			BroadcastPacket(dmgPkt.GetBufferPtr(), dmgPkt.GetDataSize());
 
 
 			// 만약 죽었다면? (HP 0) -> DELETE 패킷 처리
 			if (victim.hp == 0)
 			{
-				// 죽음 처리 로직 (나중에 부활 등 필요하면 여기서 처리)
-				Pkt_SC_DeleteChar delPkt;
-				delPkt.header.SetInfo(PacketType::SC_DELETE_CHARACTER, sizeof(Pkt_SC_DeleteChar) - sizeof(PacketHeader));
-				delPkt.id = victimId;
-				_players.erase(victimId);
-				BroadcastPacket(&delPkt, sizeof(delPkt));
-				
-				//KickUser(victimId);
+				PacketBuffer delPkt;
+				delPkt.MoveWritePos(sizeof(PacketHeader));
+				delPkt << victimId;
 
+				PacketHeader* delHeader = (PacketHeader*)delPkt.GetBufferPtr();
+				delHeader->SetInfo(PacketType::SC_DELETE_CHARACTER, delPkt.GetDataSize() - sizeof(PacketHeader));
+
+				_players.erase(victimId);
+				BroadcastPacket(delPkt.GetBufferPtr(), delPkt.GetDataSize());
+
+				KickUser(victimId);
+		
 			}
 		}
 	}

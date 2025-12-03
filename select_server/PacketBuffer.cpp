@@ -21,11 +21,6 @@ PacketBuffer::PacketBuffer(const PacketBuffer& other)
 	*this = other;
 }
 
-PacketBuffer::PacketBuffer(const PacketBuffer& other)
-{
-	*this = other;
-}
-
 
 PacketBuffer& PacketBuffer::operator=(const PacketBuffer& other)
 {

@@ -23,9 +23,9 @@ inline constexpr int RANGE_MOVE_BOTTOM = 470;
 inline constexpr int dfERROR_RANGE = 50;
 
 // 공격범위
-inline constexpr int dfATTACK1_RANGE_X = 80;
-inline constexpr int dfATTACK2_RANGE_X = 90;
-inline constexpr int dfATTACK3_RANGE_X = 100;
+inline constexpr int dfATTACK1_RANGE_X = 30;
+inline constexpr int dfATTACK2_RANGE_X = 60;
+inline constexpr int dfATTACK3_RANGE_X = 90;
 inline constexpr int dfATTACK1_RANGE_Y = 10;
 inline constexpr int dfATTACK2_RANGE_Y = 10;
 inline constexpr int dfATTACK3_RANGE_Y = 20;

@@ -351,6 +351,7 @@ void TcpServer::KickSession(int id)
 
 	if (it != sessions.end())
 	{
+		//(*it)->isDead = true;
 		DisconnectSession(*(*it));
 	}
 	

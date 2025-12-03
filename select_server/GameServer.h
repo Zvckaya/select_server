@@ -32,9 +32,12 @@ public:
     virtual void OnDisconnection(Session& session) override;
     virtual void OnRecv(Session& session, const char* packetData, int len) override;
 
-    //송신관련 
+    //송신관련 (바이트 던지기 버전)
     void SendPacket(Session& session, void* ptr, int size);
     void BroadcastPacket(void* ptr, int size, Session* exclude = nullptr);
+    
+
+
 
     // 플레이어 찾기
     Player* GetPlayer(int id);
