@@ -16,7 +16,6 @@
 #include "Session.h"
 
 class Packet;
-struct RawPacket16;
 
 class TcpServer
 {
@@ -26,15 +25,16 @@ public:
 
     bool Initialize(INetworkHandler* hander);
     void Tick();
-    void SendTo(Session& session, const RawPacket16& raw);
-    void Broadcast(const RawPacket16& raw, Session* exclude = nullptr);
+    void SendTo(Session& session, const char*data, int len);
+    void Broadcast(const char* data, int len, Session* exclude =nullptr);
+    void KickSession(int id);
 
 private:
     INetworkHandler* _hander = nullptr;
     SOCKET listenSocket = INVALID_SOCKET;
     std::vector<std::unique_ptr<Session>> sessions;
     struct linger _linger;
-    
+    std::vector<char> _copyBuffer;
 
     int idCounter = 1;
 
@@ -42,13 +42,12 @@ private:
     void AcceptProc();
     void RecvProc(Session& session);
     void SendProc(Session& session);
-    void ProcessPacket(Session& session, const char* packetData);
     void DisconnectSession(Session& session);
     void CleanupDeadSessions();
     
 
     //로그용(Logger 클래스를 호출하여 단순 로그를 찍음);
-    void LogSend(const Session& to, const RawPacket16& raw); 
+    /*void LogSend(const Session& to, const RawPacket16& raw); 
     void LogBroadcast(const RawPacket16& raw, const Session* exclude);
-    void LogRecv(const Session& from, const RawPacket16& raw);
+    void LogRecv(const Session& from, const RawPacket16& raw);*/
 };
