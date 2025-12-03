@@ -1,258 +1,193 @@
+C++ High-Performance Single-Threaded Game Server
 
+Windows Socket API (Winsock)와 select 모델을 기반으로 밑바닥부터 구현한 비동기 싱글 스레드 TCP 게임 서버입니다.
+Boost.Asio 같은 상용 네트워크 라이브러리를 사용하지 않고, 네트워크 코어와 게임 콘텐츠 로직을 분리하는 아키텍처를 직접 설계하여, 고성능 네트워크 프로그래밍의 핵심 원리를 구현하는 데 집중했습니다.
 
-#  WinSock 기반 Non-Blocking 게임 서버 아키텍처 정리
+⚙️ Tech Stack
 
-단일 스레드 + select + Logger Thread로 구성한 미니 서버 엔진
+Language: C++17
 
-## 1. 개요 (Overview)
+Platform: Windows (Winsock2)
 
-이번 프로젝트는 **WinSock + Non-blocking 소켓 + select 기반**으로 구성한
-가볍고 빠른 **단일 스레드 TCP 게임 서버**다.
+Network Model: Select-based Non-blocking I/O
 
-16바이트로 고정된 RawPacket 구조를 사용해
-유저의 접속, 이동, 별 생성·삭제 같은 최소한의 게임 이벤트를 처리하며,
-main 스레드는 오로지 네트워크 I/O & 서버 로직만 담당하도록 설계했다.
+Architecture: Single Threaded Event Loop + Async Logger Thread
 
-특히, 서버 구조가 select 기반으로 빠르게 돌아가기 때문에
-**표준 출력(cout)**이 병목을 일으켰고, 이를 해결하기 위해
-**Logger 전용 스레드**를 별도로 운영하도록 구성한 것이 특징이다.
+Tools: Visual Studio 2019+
 
-프로젝트를 구성하는 핵심 기술 요소는 다음과 같다:
+🎯 Project Goals & Architecture Philosophy
 
-* WinSock2 기반 TCP 서버
-* Non-blocking 소켓 + select를 활용한 단일 스레드 이벤트 처리
-* 16-byte RawPacket 기반의 고정 크기 프로토콜
-* PacketFactory를 통한 타입 자동 분기
-* 세션(Session) 단위의 유저 관리
-* CleanupDeadSessions()를 활용한 안전한 지연 삭제
-* Logger 전용 스레드를 활용한 표준 출력 병목 해결
+이 프로젝트는 단순한 에코 서버를 넘어서, 실제 MMORPG 서버에서 사용하는 것과 유사한 계층형 아키텍처(Layered Architecture)와 메모리/버퍼 최적화 기법을 직접 구현하는 것을 목표로 했습니다.
 
-전체적인 구조는 IOCP 같은 고성능 서버로 가기 전,
-**네트워크 서버의 기본기를 학습하기 위한 최적의 형태**라고 할 수 있다.
+1. Network Engine과 Game Content Logic의 완벽한 분리 (Decoupling)
 
----
+설계 의도
 
-## 2. 목차 (Table of Contents)
+네트워크 엔진(TcpServer)은 패킷의 의미나 게임 규칙을 전혀 모르게 만들고, 게임 로직(GameServer)은 가능한 한 Session ID / Player ID 중심으로 상태를 관리하도록 설계했습니다.
 
-1. 서버 실행 흐름 (main.cpp)
-2. Server 구조
-3. Session 구조
-4. Packet 구조 & 처리 흐름
-5. Logger 스레드
-6. 지연 삭제(Delayed Delete)
+구현 방식
 
----
+인터페이스 기반 통신: 네트워크 계층은 INetworkHandler 인터페이스만 알고 있으며, 접속/종료/패킷 수신 시 OnConnection, OnDisconnection, OnRecv 콜백만 호출합니다.
 
-## 3. 내용
+추상화된 데이터 전달: 네트워크 계층은 "바이트 스트림(char*)을 Session에게서 받았다"는 사실만 전달하며, 그 바이트가 어떤 패킷 타입인지, 어떤 게임 명령인지는 전혀 관여하지 않습니다.
 
----
+로직의 독립성: GameServer는 Session.id를 키로 _players 맵을 관리하며, 실제 게임 로직(스폰, 이동, 공격, 피격, 브로드캐스트)을 전담합니다.
 
-## 3.1 서버 실행 흐름 (main.cpp)
+결과
 
-프로그램은 다음 순서로 동작한다:
+이를 통해, 네트워크 계층을 IOCP나 다른 모델로 교체하더라도 INetworkHandler 구현만 맞추면 게임 로직은 그대로 재사용될 수 있는 유연한 구조를 확보했습니다.
 
-1. **Logger 스레드 기동**
+2. Zero-Copy를 지향하는 버퍼 관리
 
-   * 서버 메인 루프와 분리된 출력 전용 스레드 생성
+문제 인식
 
-2. **Server 생성 및 초기화**
+일반적인 소켓 프로그래밍 패턴(recv() → 임시 버퍼 → memcpy → 링버퍼 → 패킷 조립)은 패킷 파싱 전에 불필요한 메모리 복사(memcpy)를 여러 번 유발합니다.
 
-   * WinSock 초기화
-   * listen 소켓 생성
-   * 포트 바인딩 & 리슨
-   * 필요 옵션 설정 (논블로킹 등)
+해결: Direct Access RingBuffer
 
-3. **메인 루프 실행**
+CRingBuffer에 링버퍼 내부 메모리에 직접 접근할 수 있는 인터페이스를 설계했습니다.
 
-   * 16ms 주기(약 60FPS)로 Tick() 실행
-   * Tick 내부에서
+char* GetRearBufferPtr(): 쓰기 위치 포인터 반환
 
-     * NetworkProc() (네트워크 이벤트 처리)
-     * CleanupDeadSessions() (지연 삭제) 수행
+int DirectEnqueueSize(): 끊기지 않고 쓸 수 있는 연속된 공간 크기 반환
 
-main 스레드는 오로지 select와 간단한 게임 로직만 실행하기 때문에
-전체 구조가 단순하고 관리하기 쉽다.
+void MoveRear(int size): 포인터 이동
 
----
+구현 코드 예시:
 
-## 3.2 Server 구조
+// 임시 버퍼 없이 링버퍼 메모리에 직접 recv 수행
+int directSize = s.recvBuffer.DirectEnqueueSize();
+int recvBytes = recv(s.socket, s.recvBuffer.GetRearBufferPtr(), directSize, 0);
+if (recvBytes > 0) s.recvBuffer.MoveRear(recvBytes);
 
-Server는 프로젝트의 핵심이며 다음과 같은 역할을 담당한다.
 
-### ✔ 1) WinSock 초기화 & Non-blocking listen 소켓 준비
+결과
 
-* WSAStartup
-* socket(AF_INET, SOCK_STREAM)
-* bind & listen
-* ioctlsocket(FIONBIO)로 논블로킹 설정
+커널에서 사용자 영역으로 넘어온 데이터를 임시 버퍼 없이 바로 링버퍼에 꽂아넣는 구조를 만들어, 메모리 복사 비용을 획기적으로 줄였습니다. 송신(send) 또한 GetFrontBufferPtr()를 통해 링버퍼에서 직접 데이터를 가져갑니다.
 
-이 과정을 통해 “아무것도 기다리지 않는”
-즉, CPU를 점유하지 않는 입력 감지가 가능해진다.
+3. 직렬화 버퍼 (Serialization Buffer) 도입
 
----
+초기 접근 및 문제점
 
-### ✔ 2) select 기반 이벤트 처리
+초기에는 C-Style 구조체 캐스팅(reinterpret_cast)을 사용했으나, 컴파일러/플랫폼 간 패딩(Padding) 문제와 구조체 변경 시 유연성이 떨어지는 문제를 겪었습니다.
 
-select 이벤트 루프는 다음 단계로 구성된다:
+개선: PacketBuffer
 
-1. **fd_set 초기화**
-2. **listenSocket 등록**
-3. **모든 살아있는 session 소켓 등록**
-4. **select 호출**
+std::vector<char> 기반의 직렬화 버퍼 클래스를 직접 구현했습니다.
 
-select 결과:
+operator<< / operator>>를 오버로딩하여, Stream 기반의 안전한 직렬화를 지원합니다.
 
-* listenSocket readable → **AcceptProc()**
-* session readable → **RecvProc()**
+// 직렬화 (Serialize)
+PacketBuffer buf;
+buf << (uint8_t)direction << (int16_t)x << (int16_t)y;
 
-이 구조는 단일 스레드이지만
-다중 클라이언트의 동시 접속과 데이터를 안정적으로 처리할 수 있다.
+// 역직렬화 (Deserialize)
+uint8_t dir;
+int16_t x, y;
+buf >> dir >> x >> y;
 
----
 
-### ✔ 3) RecvProc(): 버퍼 기반 안전한 패킷 처리
+결과
 
-recv는 항상 패킷 단위(16바이트)로 오지 않는다.
-따라서 Session 구조체 내부의 recvBuffer에서 누적 처리한다.
+구조체 패킹 문제에서 자유로워졌으며, 이기종 클라이언트와의 통신 안정성을 확보했습니다. 또한, memcpy 사용을 배제하여 버퍼 오버플로우 등의 메모리 오류를 예방했습니다.
 
-* recv → recvBytes 누적
-* recvBytes ≥ 16이면 1패킷 처리
-* 처리 후 남은 바이트는 memmove로 앞으로 이동
-* 단편화(fragmentation) 대응 가능
+4. 패킷 팩토리(Packet Factory)와 자동화된 핸들링
 
-이는 네트워크 프로그래밍의 핵심 개념이다.
+Data Flow
 
----
+Raw Data 수신 → PacketHeader 파싱 → PacketFactory::CreatePacket → Packet::Decode → Packet::Handle
 
-### ✔ 4) 패킷 고수준 처리 흐름
+특징
 
-패킷 처리는 다음 구조를 따른다:
+다형성 활용: 모든 패킷은 Packet 추상 클래스를 상속받으며, Handle 메서드 안에서만 실제 게임 로직에 접근합니다.
 
-```
-RawPacket16
-    ↓
-PacketFactory::CreateFromRaw()
-    ↓
-Packet 객체 생성
-    ↓
-FromRaw()로 역직렬화
-    ↓
-Handle()에서 서버 로직 처리
-```
+스위치문 제거: GameServer.cpp에 거대한 switch-case 문이 생기는 것을 방지하고, 객체지향적 다형성을 활용해 패킷 처리 로직을 각 패킷 클래스로 캡슐화했습니다.
 
-이 방식은 switch-case를 최소화하고,
-새로운 패킷 추가도 패킷 클래스만 만들면 되는 확장성 있는 구조다.
+결과
 
----
+새로운 패킷 타입을 추가할 때 enum 정의, Packet 클래스 구현, Factory 등록만으로 확장이 가능해졌으며, 네트워크 코드와 로직 코드가 섞이지 않는 깔끔한 구조를 유지했습니다.
 
-### ✔ 5) Broadcast & SendTo
+🏗️ System Architecture
 
-* RawPacket16 그대로 송출
-* exclude 인자를 통해 특정 클라이언트만 제외 가능
-* 모든 네트워크 출력은 Logger 기록과 함께 수행
+Layered Architecture
 
----
+Network Layer: Winsock + select 기반 소켓 I/O. 각 클라이언트는 Session 객체(Socket + RingBuffer)로 관리됩니다.
 
-## 3.3 Session 구조
+Interface Layer: TcpServer가 CRingBuffer를 사용해 패킷 경계를 식별하고, 완성된 패킷 단위만 INetworkHandler로 전달합니다.
 
-Session은 “클라이언트 1명”을 표현하는 최소 단위이며 다음 정보를 갖는다:
+Protocol Layer: PacketHeader, PacketType, PacketBuffer로 프로토콜을 정의하고, PacketFactory가 Raw Data를 C++ 객체로 역직렬화합니다.
 
-* 클라이언트 socket
-* 고유 id
-* x, y 위치
-* recvBuffer(4096)
-* recvBytes
-* isDead (삭제 플래그)
+Logic Layer: GameServer가 플레이어 관리 및 게임 로직(이동, 전투)을 수행하고, 결과를 다시 패킷으로 직렬화하여 브로드캐스트합니다.
 
-### 설계 포인트
+Runtime Flow
 
-1. **소켓과 세션의 분리**
-2. recvBuffer로 누적 처리 → 패킷 경계 문제 해결
-3. isDead 기반으로 삭제 예약 → 즉시 삭제 X
+Initialization: main.cpp에서 Logger 스레드와 서버 객체를 초기화하고, bind/listen을 수행합니다.
 
-이는 select 기반 서버에서 가장 안정적인 방식이다.
+Game Loop:
 
----
+while (true) {
+    server.Tick();      // 네트워크 I/O (select, accept, recv, send)
+    gameLogic.Update(); // 게임 로직 (이동 등)
+    // 20ms 프레임 동기화
+}
 
-## 3.4 Packet 구조 & 처리
 
-### ✔ RawPacket16 (16 bytes)
+Connection Life-cycle: AcceptProc -> OnConnection -> DisconnectSession (지연 삭제 예약) -> CleanupDeadSessions (실제 해제)
 
-고정 길이 패킷:
+🛠️ Technical Challenges & Troubleshooting
 
-```
-type (int)
-a (int)
-b (int)
-c (int)
-```
+1. Select 모델의 Busy Waiting (CPU 100% 점유) 문제
 
-단순하지만 성능이 매우 좋은 구조다.
+문제: 초기 구현 시 모든 세션 소켓을 무조건 writeSet에 넣고 select()를 호출했습니다. 대부분의 소켓은 항상 "쓰기 가능" 상태이므로 select가 즉시 리턴되어 CPU 100% Busy Waiting 현상이 발생했습니다.
 
----
+해결: 송신 버퍼(SendBuffer)에 실제로 보낼 데이터가 존재하는 세션만 writeSet에 등록하도록 로직을 변경하여 불필요한 호출을 줄이고 CPU 사용량을 최적화했습니다.
 
-### ✔ Packet 종류
+2. 표준 출력(std::cout)에 의한 병목 현상
 
-* IDAssign
-* StarCreate
-* StarDelete
-* Move
+문제: select 기반 싱글 스레드 서버는 메인 루프가 매우 빠르게 돌아야 하는데, 디버깅을 위해 사용한 std::cout의 블로킹으로 인해 네트워크 처리 속도가 급격히 저하되었습니다.
 
-모두 RawPacket16을 기반으로 직렬화/역직렬화가 가능하며,
-PacketFactory에서 자동으로 변환된다.
+해결: 비동기 로거(Async Logger)를 구현했습니다. 메인 스레드는 로그 메시지를 Thread-safe Queue에 Push만 하고 즉시 리턴하며, 별도의 로거 스레드가 condition_variable로 깨어나 쌓인 로그를 한 번에 출력합니다. 이를 통해 로깅 부하를 네트워크 루프에서 완전히 분리했습니다.
 
----
+3. 세션 종료 시 Dangling Iterator 문제
 
-### ✔ Move 핸들링 예시
+문제: 게임 로직 루프(for (auto& s : sessions)) 도중 접속 종료를 감지하고 바로 erase를 호출하면 이터레이터가 무효화되어 크래시가 발생했습니다.
 
-```cpp
-session.x = x;
-session.y = y;
-server.Broadcast(raw, &session);
-```
+해결: 지연 삭제(Lazy Disconnection) 패턴을 적용했습니다. 즉시 삭제하는 대신 Session::isDead = true 플래그만 세팅하고, 프레임의 가장 마지막 단계인 CleanupDeadSessions에서 일괄적으로 실제 소켓 종료 및 메모리 해제를 수행하여 안전성을 확보했습니다.
 
-한 유저가 이동하면,
-다른 모든 클라이언트에게 이동 정보를 브로드캐스트한다.
+📂 Source Code Structure
 
----
+Core Network
 
-## 3.5 Logger 스레드
+Server.cpp: select 기반 I/O 멀티플렉싱 엔진 (TcpServer)
 
-select 루프는 매우 빠르게 실행되기 때문에
-cout 같은 동기 I/O는 심각한 병목을 발생시킨다.
+Session.h: 소켓 + 송수신 CRingBuffer를 관리하는 세션 객체
 
-이를 해결하기 위해 Logger는 다음 구성으로 만들어졌다:
+CRingBuffer.cpp: Direct Access가 가능한 고성능 링버퍼 구현
 
-* Log(msg) → mutex + queue push
-* worker thread → queue pop + cout 출력
-* condition_variable 기반 대기/깨우기
-* atomic<bool>로 안전한 종료 지원
+Protocol & Utils
 
-이 구조는 실제로 대규모 서버에서도 사용되는 안정적인 패턴이다.
+PacketBuffer.cpp: 안전한 직렬화/역직렬화 헬퍼
 
----
+Packet.cpp: 각 패킷 클래스 정의 및 PacketFactory
 
-## 3.6 지연 삭제 (Delayed Delete)
+Logger.cpp: 스레드 안전 비동기 로거
 
-세션 삭제는 즉시 하면 안 된다.
-왜냐하면 select 루프나 다른 함수에서 해당 Session을 참조 중일 수 있기 때문이다.
+NetConfig.h: 서버 설정 및 게임 상수
 
-따라서 이 프로젝트는 다음 흐름을 사용한다:
+Game Content
 
-1. DisconnectSession()
-   → isDead = true
-2. Tick() → CleanupDeadSessions()
-3. remove_if로 dead session 뒤로 이동
-4. 소켓 close
-5. vector.erase로 실제 삭제
+GameServer.cpp: 플레이어 관리, 이동/전투/피격 로직, 패킷 핸들링
 
-이 과정을 통해
+INetworkHandler.h: 네트워크 엔진과 로직을 연결하는 인터페이스
 
-* dangling 포인터 방지
-* 재귀적 삭제 문제 해결
-* select 루프와 충돌 없음
+🚀 How to Build & Run
 
-이라는 안정적인 구조를 달성했다.
+Requirements: Windows, Visual Studio 2019 이상 (C++17 지원)
 
----
+Open Server.sln.
 
+Set Configuration to Release / x64.
+
+Build Solution (Ctrl + Shift + B).
+
+Run Server.exe.
