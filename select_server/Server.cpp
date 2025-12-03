@@ -274,6 +274,7 @@ void TcpServer::CleanupDeadSessions()
     //removeif+람다를 이용하여 세션들을 순회, 만약, 삭제예약(isDead)이 활성화 된 요소들을 뒤로 모아준다.
     //remove_if는 실제 삭제는 아님. 반환형은 삭제되지 않는 구간의 마지막 다음 위치를 반환함!
     //즉 이터레이터를 받아. 전체 순회가 아니라. 삭제 시작 위치에서 끝까지 돌 수 있다.
+    //네츄럴 버전 
 
     for (auto itr = it; itr != sessions.end(); ++itr)
     {
