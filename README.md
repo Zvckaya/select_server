@@ -1,9 +1,9 @@
-C++ High-Performance Single-Threaded Game Server
+# C++ High-Performance Single-Threaded Game Server
 
 Windows Socket API (Winsock)와 select 모델을 기반으로 밑바닥부터 구현한 비동기 싱글 스레드 TCP 게임 서버입니다.
 Boost.Asio 같은 상용 네트워크 라이브러리를 사용하지 않고, 네트워크 코어와 게임 콘텐츠 로직을 분리하는 아키텍처를 직접 설계하여, 고성능 네트워크 프로그래밍의 핵심 원리를 구현하는 데 집중했습니다.
 
-⚙️ Tech Stack
+# ⚙️ Tech Stack
 
 Language: C++17
 
@@ -15,11 +15,11 @@ Architecture: Single Threaded Event Loop + Async Logger Thread
 
 Tools: Visual Studio 2019+
 
-🎯 Project Goals & Architecture Philosophy
+# 🎯 Project Goals & Architecture Philosophy
 
 이 프로젝트는 단순한 에코 서버를 넘어서, 실제 MMORPG 서버에서 사용하는 것과 유사한 계층형 아키텍처(Layered Architecture)와 메모리/버퍼 최적화 기법을 직접 구현하는 것을 목표로 했습니다.
 
-1. Network Engine과 Game Content Logic의 완벽한 분리 (Decoupling)
+## 1. Network Engine과 Game Content Logic의 완벽한 분리 (Decoupling)
 
 설계 의도
 
@@ -37,7 +37,7 @@ Tools: Visual Studio 2019+
 
 이를 통해, 네트워크 계층을 IOCP나 다른 모델로 교체하더라도 INetworkHandler 구현만 맞추면 게임 로직은 그대로 재사용될 수 있는 유연한 구조를 확보했습니다.
 
-2. Zero-Copy를 지향하는 버퍼 관리
+## 2. Zero-Copy를 지향하는 버퍼 관리
 
 문제 인식
 
@@ -65,7 +65,7 @@ if (recvBytes > 0) s.recvBuffer.MoveRear(recvBytes);
 
 커널에서 사용자 영역으로 넘어온 데이터를 임시 버퍼 없이 바로 링버퍼에 꽂아넣는 구조를 만들어, 메모리 복사 비용을 획기적으로 줄였습니다. 송신(send) 또한 GetFrontBufferPtr()를 통해 링버퍼에서 직접 데이터를 가져갑니다.
 
-3. 직렬화 버퍼 (Serialization Buffer) 도입
+## 3. 직렬화 버퍼 (Serialization Buffer) 도입
 
 초기 접근 및 문제점
 
@@ -91,7 +91,7 @@ buf >> dir >> x >> y;
 
 구조체 패킹 문제에서 자유로워졌으며, 이기종 클라이언트와의 통신 안정성을 확보했습니다. 또한, memcpy 사용을 배제하여 버퍼 오버플로우 등의 메모리 오류를 예방했습니다.
 
-4. 패킷 팩토리(Packet Factory)와 자동화된 핸들링
+## 4. 패킷 팩토리(Packet Factory)와 자동화된 핸들링
 
 Data Flow
 
@@ -134,21 +134,21 @@ while (true) {
 
 Connection Life-cycle: AcceptProc -> OnConnection -> DisconnectSession (지연 삭제 예약) -> CleanupDeadSessions (실제 해제)
 
-🛠️ Technical Challenges & Troubleshooting
+# 🛠️ Technical Challenges & Troubleshooting
 
-1. Select 모델의 Busy Waiting (CPU 100% 점유) 문제
+## 1. Select 모델의 Busy Waiting (CPU 100% 점유) 문제
 
 문제: 초기 구현 시 모든 세션 소켓을 무조건 writeSet에 넣고 select()를 호출했습니다. 대부분의 소켓은 항상 "쓰기 가능" 상태이므로 select가 즉시 리턴되어 CPU 100% Busy Waiting 현상이 발생했습니다.
 
 해결: 송신 버퍼(SendBuffer)에 실제로 보낼 데이터가 존재하는 세션만 writeSet에 등록하도록 로직을 변경하여 불필요한 호출을 줄이고 CPU 사용량을 최적화했습니다.
 
-2. 표준 출력(std::cout)에 의한 병목 현상
+## 2. 표준 출력(std::cout)에 의한 병목 현상
 
 문제: select 기반 싱글 스레드 서버는 메인 루프가 매우 빠르게 돌아야 하는데, 디버깅을 위해 사용한 std::cout의 블로킹으로 인해 네트워크 처리 속도가 급격히 저하되었습니다.
 
 해결: 비동기 로거(Async Logger)를 구현했습니다. 메인 스레드는 로그 메시지를 Thread-safe Queue에 Push만 하고 즉시 리턴하며, 별도의 로거 스레드가 condition_variable로 깨어나 쌓인 로그를 한 번에 출력합니다. 이를 통해 로깅 부하를 네트워크 루프에서 완전히 분리했습니다.
 
-3. 세션 종료 시 Dangling Iterator 문제
+## 3. 세션 종료 시 Dangling Iterator 문제
 
 문제: 게임 로직 루프(for (auto& s : sessions)) 도중 접속 종료를 감지하고 바로 erase를 호출하면 이터레이터가 무효화되어 크래시가 발생했습니다.
 
