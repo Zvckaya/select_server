@@ -267,7 +267,6 @@ void TcpServer::DisconnectSession(Session& s)
 
 void TcpServer::CleanupDeadSessions()
 {
-	// 정석적인 벡터 삭제 루프
 	for (auto it = sessions.begin(); it != sessions.end(); )
 	{
 		if ((*it)->isDead)

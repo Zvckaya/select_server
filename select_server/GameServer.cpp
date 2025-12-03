@@ -77,10 +77,9 @@ void GameServer::OnConnection(Session& session)
 
 void GameServer::OnDisconnection(Session& session)
 {
-	// 1. 목록에서 제거
+	
 	_players.erase(session.id);
 
-	// 2. 다른 유저들에게 삭제 알림 (SC_DELETE_CHARACTER)
 	Pkt_SC_DeleteChar pkt;
 	pkt.header.SetInfo(PacketType::SC_DELETE_CHARACTER, sizeof(Pkt_SC_DeleteChar) - sizeof(PacketHeader));
 	pkt.id = session.id;
@@ -129,7 +128,6 @@ void GameServer::UpdatePlayers()
 
 void GameServer::MovePlayer(Player& p)
 {
-	// 1. 방향에 따른 좌표 이동
 	switch (p.direction)
 	{
 	case dfPACKET_MOVE_DIR_LL: // 좌
@@ -195,11 +193,9 @@ void GameServer::Update()
 
 void GameServer::HandleAttack(int attackerId, int attackType)
 {
-	// 1. 공격자 찾기
 	Player* attacker = GetPlayer(attackerId);
 	if (attacker == nullptr) return;
-
-	// 2. 공격 범위 및 데미지 설정
+	
 	int rangeX = 0;
 	int rangeY = 0;
 	int damage = 0;
@@ -225,8 +221,6 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 		return;
 	}
 
-	// 3. 피격 판정 루프 (모든 유저 검사)
-	// (최적화를 위해선 쿼드트리 등을 쓰지만, 60명이면 그냥 루프 돌아도 충분함)
 	for (auto& pair : _players)
 	{
 		int victimId = pair.first;
@@ -263,7 +257,6 @@ void GameServer::HandleAttack(int attackerId, int attackType)
 			}
 		}
 
-		// 4. 맞았다면?
 		if (isHit)
 		{
 			// 체력 감소 (음수 방지)
