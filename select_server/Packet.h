@@ -15,6 +15,8 @@ public:
     
     // 패킷 처리 (게임 서버에서 로직 구현)
     virtual void Handle(GameServer& server, Session& session) = 0;
+
+    
 };
 
 // 개별 패킷 클래스들 -----------------------
